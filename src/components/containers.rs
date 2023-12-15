@@ -10,6 +10,8 @@ use ratatui::{
     Frame,
 };
 
+use crate::action::Action;
+use crate::components::container_inspect::ContainerDetails;
 use crate::components::Component;
 use crate::utils::get_or_not_found;
 
@@ -21,7 +23,6 @@ const CONTAINER_CONSTRAINTS: [Constraint; 4] = [
 ];
 
 pub struct Containers {
-    should_quit: bool,
     all: bool,
     filters: HashMap<String, Vec<String>>,
     state: TableState,
@@ -31,7 +32,6 @@ pub struct Containers {
 impl Containers {
     pub fn new() -> Self {
         Containers {
-            should_quit: false,
             all: false,
             filters: HashMap::new(),
             state: Default::default(),
@@ -69,33 +69,63 @@ impl Containers {
 }
 
 impl Component for Containers {
-    fn update(&mut self) -> Result<()> {
-        let options = ListContainersOptions {
-            all: self.all,
-            filters: self.filters.clone(),
-            ..Default::default()
-        };
+    fn get_name(&self) -> &'static str {
+        "Containers"
+    }
 
-        self.containers = block_on(async {
-            let docker_cli =
-                Docker::connect_with_socket_defaults().expect("Unable to connect to docker");
-            let containers = docker_cli
-                .list_containers(Some(options))
-                .await
-                .expect("Unable to get container list");
-            containers
-                .iter()
-                .map(|c| {
-                    [
-                        get_or_not_found!(c.id),
-                        get_or_not_found!(c.names, |c| c.get(0)),
-                        get_or_not_found!(c.image),
-                        get_or_not_found!(c.state),
-                    ]
-                })
-                .collect()
-        });
-        Ok(())
+    fn update(&mut self, action: Option<Action>) -> Result<Option<Action>> {
+        match action {
+            Some(Action::Refresh) => {
+                let options = ListContainersOptions {
+                    all: self.all,
+                    filters: self.filters.clone(),
+                    ..Default::default()
+                };
+
+                self.containers = block_on(async {
+                    let docker_cli = Docker::connect_with_socket_defaults()
+                        .expect("Unable to connect to docker");
+                    let containers = docker_cli
+                        .list_containers(Some(options))
+                        .await
+                        .expect("Unable to get container list");
+                    containers
+                        .iter()
+                        .map(|c| {
+                            [
+                                get_or_not_found!(c.id),
+                                get_or_not_found!(c.names, |c| c.get(0)),
+                                get_or_not_found!(c.image),
+                                get_or_not_found!(c.state),
+                            ]
+                        })
+                        .collect()
+                });
+                Ok(None)
+            }
+            Some(Action::Down) => {
+                self.next();
+                Ok(None)
+            }
+            Some(Action::Up) => {
+                self.previous();
+                Ok(None)
+            }
+            Some(Action::All) => {
+                self.all = if self.all { false } else { true };
+                Ok(None)
+            }
+            Some(Action::Inspect) => {
+                let cid = self
+                    .state
+                    .selected()
+                    .and_then(|i| self.containers.get(i))
+                    .and_then(|c| c.get(0))
+                    .map(|cid| Action::Screen(Box::new(ContainerDetails::new(cid.to_string()))));
+                Ok(cid)
+            }
+            _ => Ok(action),
+        }
     }
 
     fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> Result<()> {

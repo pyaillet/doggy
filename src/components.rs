@@ -2,10 +2,15 @@ use ratatui::{layout::Rect, Frame};
 
 use color_eyre::Result;
 
+use crate::action::Action;
+
+pub mod container_inspect;
 pub mod containers;
 
 pub(crate) trait Component {
-    fn update(&mut self) -> Result<()>;
+    fn get_name(&self) -> &'static str;
+
+    fn update(&mut self, action: Option<Action>) -> Result<Option<Action>>;
 
     /// Render the component on the screen. (REQUIRED)
     ///

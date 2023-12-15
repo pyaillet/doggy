@@ -5,10 +5,18 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use log::LevelFilter;
+use log4rs::{
+    append::file::FileAppender,
+    config::{Appender, Root},
+    encode::pattern::PatternEncoder,
+    Config,
+};
 use ratatui::prelude::*;
 
 use color_eyre::eyre::Result;
 
+mod action;
 mod app;
 mod components;
 mod utils;
@@ -52,7 +60,21 @@ async fn run() -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    env_logger::init();
+    // env_logger::init();
+    let logfile = FileAppender::builder()
+        .encoder(Box::new(PatternEncoder::new("{l} - {m}\n")))
+        .build("log/output.log")?;
+
+    let config = Config::builder()
+        .appender(Appender::builder().build("logfile", Box::new(logfile)))
+        .build(
+            Root::builder()
+                .appender("logfile")
+                .build(LevelFilter::Debug),
+        )?;
+
+    log4rs::init_config(config)?;
+
     if let Err(e) = run().await {
         eprintln!("{} error: Something went wrong", env!("CARGO_PKG_NAME"));
         Err(e)
