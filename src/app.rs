@@ -1,8 +1,6 @@
 use color_eyre::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 
-use log;
-
 use crate::action::Action;
 use crate::components::containers::Containers;
 use crate::components::Component;
@@ -57,8 +55,8 @@ impl App {
                         KeyCode::Char('k') | KeyCode::Up => Some(Action::Up),
                         KeyCode::Char('h') | KeyCode::Left => Some(Action::Left),
                         KeyCode::Char('l') | KeyCode::Right => Some(Action::Right),
-                        KeyCode::PageUp => Some(Action::PageUp),
-                        KeyCode::PageDown => Some(Action::PageDown),
+                        KeyCode::Char('J') | KeyCode::PageUp => Some(Action::PageUp),
+                        KeyCode::Char('K') | KeyCode::PageDown => Some(Action::PageDown),
                         KeyCode::Char('a') => Some(Action::All),
                         KeyCode::Char('i') => Some(Action::Inspect),
                         KeyCode::Esc => Some(Action::PreviousScreen),

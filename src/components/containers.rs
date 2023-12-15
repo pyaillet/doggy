@@ -94,7 +94,7 @@ impl Component for Containers {
                         .map(|c| {
                             [
                                 get_or_not_found!(c.id),
-                                get_or_not_found!(c.names, |c| c.get(0)),
+                                get_or_not_found!(c.names, |c| c.first()),
                                 get_or_not_found!(c.image),
                                 get_or_not_found!(c.state),
                             ]
@@ -112,7 +112,7 @@ impl Component for Containers {
                 Ok(None)
             }
             Some(Action::All) => {
-                self.all = if self.all { false } else { true };
+                self.all = !self.all;
                 Ok(None)
             }
             Some(Action::Inspect) => {
@@ -120,7 +120,7 @@ impl Component for Containers {
                     .state
                     .selected()
                     .and_then(|i| self.containers.get(i))
-                    .and_then(|c| c.get(0))
+                    .and_then(|c| c.first())
                     .map(|cid| Action::Screen(Box::new(ContainerDetails::new(cid.to_string()))));
                 Ok(cid)
             }
