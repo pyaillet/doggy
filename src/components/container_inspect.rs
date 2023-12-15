@@ -43,13 +43,13 @@ impl ContainerDetails {
         }
     }
 
-    fn down(&mut self) {
-        self.vertical_scroll = self.vertical_scroll.saturating_add(1);
+    fn down(&mut self, qty: usize) {
+        self.vertical_scroll = self.vertical_scroll.saturating_add(qty);
         self.vertical_scroll_state = self.vertical_scroll_state.position(self.vertical_scroll);
     }
 
-    fn up(&mut self) {
-        self.vertical_scroll = self.vertical_scroll.saturating_sub(1);
+    fn up(&mut self, qty: usize) {
+        self.vertical_scroll = self.vertical_scroll.saturating_sub(qty);
         self.vertical_scroll_state = self.vertical_scroll_state.position(self.vertical_scroll);
     }
 }
@@ -66,11 +66,19 @@ impl Component for ContainerDetails {
         let action = match action {
             Some(Action::PreviousScreen) => Some(Action::Screen(Box::new(Containers::new()))),
             Some(Action::Up) => {
-                self.up();
+                self.up(1);
                 None
             }
             Some(Action::Down) => {
-                self.down();
+                self.down(1);
+                None
+            }
+            Some(Action::PageUp) => {
+                self.up(15);
+                None
+            }
+            Some(Action::PageDown) => {
+                self.down(15);
                 None
             }
             Some(action) => Some(action),

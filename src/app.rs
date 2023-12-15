@@ -57,6 +57,8 @@ impl App {
                         KeyCode::Char('k') | KeyCode::Up => Some(Action::Up),
                         KeyCode::Char('h') | KeyCode::Left => Some(Action::Left),
                         KeyCode::Char('l') | KeyCode::Right => Some(Action::Right),
+                        KeyCode::PageUp => Some(Action::PageUp),
+                        KeyCode::PageDown => Some(Action::PageDown),
                         KeyCode::Char('a') => Some(Action::All),
                         KeyCode::Char('i') => Some(Action::Inspect),
                         KeyCode::Esc => Some(Action::PreviousScreen),
