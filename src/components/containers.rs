@@ -169,11 +169,14 @@ impl Component for Containers {
             }
             Some(Action::All) => {
                 self.all = !self.all;
-                Ok(None)
+                Ok(self.update(Some(Action::Refresh))?)
             }
             Some(Action::Inspect) => {
                 let cid = self.get_selected_container_info().map(|cinfo| {
-                    Action::Screen(Box::new(ContainerDetails::new(cinfo.0.to_string())))
+                    Action::Screen(Box::new(ContainerDetails::new(
+                        cinfo.0.to_string(),
+                        cinfo.1.to_string(),
+                    )))
                 });
                 Ok(cid)
             }

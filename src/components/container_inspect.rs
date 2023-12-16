@@ -17,13 +17,14 @@ use crate::{
 
 pub struct ContainerDetails {
     cid: String,
+    name: String,
     details: String,
     vertical_scroll_state: ScrollbarState,
     vertical_scroll: usize,
 }
 
 impl ContainerDetails {
-    pub fn new(cid: String) -> Self {
+    pub fn new(cid: String, name: String) -> Self {
         let details = block_on(async {
             let docker_cli =
                 Docker::connect_with_socket_defaults().expect("Unable to connect to docker");
@@ -37,6 +38,7 @@ impl ContainerDetails {
 
         ContainerDetails {
             cid,
+            name,
             details,
             vertical_scroll_state: Default::default(),
             vertical_scroll: 0,
@@ -95,7 +97,11 @@ impl Component for ContainerDetails {
                     .borders(Borders::ALL)
                     .gray()
                     .title(Span::styled(
-                        format!("Inspecting container: \"{}\" (press 'ESC' to previous screen, 'q' to quit)", self.cid),
+                        format!(
+                            "Inspecting container: \"{}/{}\" (press 'ESC' to previous screen, 'q' to quit)",
+                            &self.cid[0..12],
+                            self.name
+                        ),
                         Style::default().add_modifier(Modifier::BOLD),
                     )),
             )
