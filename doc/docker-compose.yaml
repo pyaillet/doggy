@@ -1,0 +1,8 @@
+version: "3.8"
+services:
+  vhs:
+    image: ghcr.io/charmbracelet/vhs
+    working_dir: /vhs
+    volumes:
+      - ../:/vhs
+      - /var/run/docker.sock:/var/run/docker.sock
