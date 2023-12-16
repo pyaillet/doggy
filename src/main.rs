@@ -1,4 +1,7 @@
-use std::io::{self, Stdout};
+use std::{
+    io::{self, Stdout},
+    panic::set_hook,
+};
 
 use app::App;
 use crossterm::{
@@ -78,6 +81,15 @@ async fn main() -> Result<()> {
         )?;
 
     log4rs::init_config(config)?;
+
+    set_hook(Box::new(|info| {
+        let _ = disable_raw_mode();
+        let _ = crossterm::execute!(io::stdout(), LeaveAlternateScreen);
+
+        if let Some(s) = info.payload().downcast_ref::<String>() {
+            log::error!("{}", s);
+        }
+    }));
 
     if let Err(e) = run().await {
         eprintln!("{} error: Something went wrong", env!("CARGO_PKG_NAME"));

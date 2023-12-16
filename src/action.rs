@@ -17,6 +17,8 @@ pub enum Action {
     Screen(Box<dyn Component>),
     Ok,
     PreviousScreen,
+    Change,
+    Filter,
 }
 
 impl std::fmt::Debug for Action {
@@ -36,6 +38,8 @@ impl std::fmt::Debug for Action {
             Action::Screen(c) => f.write_fmt(format_args!("Screen({})", c.get_name())),
             Action::Ok => f.write_str("Ok"),
             Action::PreviousScreen => f.write_str("PreviousScreen"),
+            Action::Change => f.write_str("Change"),
+            Action::Filter => f.write_str("Filter"),
         }
     }
 }

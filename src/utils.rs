@@ -3,27 +3,28 @@ use ratatui::{
     widgets::{Block, Borders, Cell, Row, Table},
 };
 
-pub const NOT_FOUND: &str = "<NOT_FOUND>";
+pub const NONE: &str = "<none>";
 
 macro_rules! get_or_not_found {
     ($property:expr) => {
         $property
             .as_ref()
             .and_then(|s| Some(s.as_str()))
-            .unwrap_or(crate::utils::NOT_FOUND)
+            .unwrap_or(crate::utils::NONE)
             .to_string()
     };
     ($property:expr, $extractor:expr) => {
         $property
             .as_ref()
             .and_then($extractor)
-            .unwrap_or(crate::utils::NOT_FOUND)
+            .unwrap_or(crate::utils::NONE)
             .to_string()
     };
 }
 pub(crate) use get_or_not_found;
 
 pub(crate) fn table<'a, const SIZE: usize>(
+    title: &'a str,
     headers: [&'a str; SIZE],
     items: Vec<[String; SIZE]>,
     constraints: &'static [Constraint; SIZE],
@@ -45,7 +46,7 @@ pub(crate) fn table<'a, const SIZE: usize>(
     Table::new(rows)
         .widths(constraints)
         .header(header)
-        .block(Block::default().borders(Borders::ALL).title("Containers"))
+        .block(Block::default().borders(Borders::ALL).title(title))
         .highlight_style(selected_style)
 }
 

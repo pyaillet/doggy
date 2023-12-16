@@ -1,30 +1,29 @@
 use std::collections::HashMap;
 
-use bollard::{
-    container::{ListContainersOptions, RemoveContainerOptions},
-    Docker,
-};
+use bollard::service::ImageSummary;
+use chrono::{DateTime, Utc};
 use color_eyre::Result;
 
+use humansize::{FormatSizeI, BINARY};
+
+use bollard::image::{ListImagesOptions, RemoveImageOptions};
+use bollard::Docker;
 use futures::executor::block_on;
-use ratatui::{
-    layout::{Constraint, Layout, Rect},
-    style::{Style, Stylize},
-    text::{Line, Span},
-    widgets::{Block, Borders, Clear, Padding, Paragraph, TableState, Wrap},
-    Frame,
-};
+use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::style::{Style, Stylize};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph, TableState, Wrap};
+use ratatui::Frame;
 
+use crate::action::Action;
 use crate::components::Component;
-use crate::utils::get_or_not_found;
-use crate::{action::Action, utils::centered_rect};
-use crate::{components::container_inspect::ContainerDetails, utils::table};
+use crate::utils::{centered_rect, get_or_not_found, table};
 
-const CONTAINER_CONSTRAINTS: [Constraint; 4] = [
-    Constraint::Min(14),
-    Constraint::Max(30),
-    Constraint::Percentage(50),
-    Constraint::Min(14),
+const IMAGE_CONSTRAINTS: [Constraint; 4] = [
+    Constraint::Max(15),
+    Constraint::Min(35),
+    Constraint::Max(10),
+    Constraint::Max(20),
 ];
 
 enum Popup {
@@ -32,31 +31,29 @@ enum Popup {
     Delete(String, String),
 }
 
-pub struct Containers {
-    all: bool,
+pub struct Images {
     filters: HashMap<String, Vec<String>>,
     state: TableState,
-    containers: Vec<[String; 4]>,
+    images: Vec<[String; 4]>,
     show_popup: Popup,
 }
 
-impl Containers {
+impl Images {
     pub fn new() -> Self {
-        Containers {
-            all: false,
+        Images {
             filters: HashMap::new(),
             state: Default::default(),
-            containers: Vec::new(),
+            images: Vec::new(),
             show_popup: Popup::None,
         }
     }
 
     fn previous(&mut self) {
-        if !self.containers.is_empty() {
+        if !self.images.is_empty() {
             let i = match self.state.selected() {
                 Some(i) => {
                     if i == 0 {
-                        self.containers.len() - 1
+                        self.images.len() - 1
                     } else {
                         i - 1
                     }
@@ -68,10 +65,10 @@ impl Containers {
     }
 
     fn next(&mut self) {
-        if !self.containers.is_empty() {
+        if !self.images.is_empty() {
             let i = match self.state.selected() {
                 Some(i) => {
-                    if i >= self.containers.len() - 1 {
+                    if i >= self.images.len() - 1 {
                         0
                     } else {
                         i + 1
@@ -83,22 +80,22 @@ impl Containers {
         }
     }
 
-    fn get_selected_container_info(&self) -> Option<(String, String)> {
+    fn get_selected_image_info(&self) -> Option<(String, String)> {
         self.state
             .selected()
-            .and_then(|i| self.containers.get(i))
+            .and_then(|i| self.images.get(i))
             .and_then(|c| {
                 c.first()
-                    .and_then(|cid| c.get(1).map(|cname| (cid.to_owned(), cname.to_owned())))
+                    .and_then(|id| c.get(1).map(|tag| (id.to_owned(), tag.to_owned())))
             })
     }
 
     fn draw_popup(&self, f: &mut Frame<'_>) {
-        if let Popup::Delete(_cid, cname) = &self.show_popup {
+        if let Popup::Delete(_id, tag) = &self.show_popup {
             let text = vec![
                 Line::from(vec![
-                    Span::raw("Are you sure you want to delete container: \""),
-                    Span::styled(cname, Style::new().gray()),
+                    Span::raw("Are you sure you want to delete image: \""),
+                    Span::styled(tag, Style::new().gray()),
                     Span::raw("\"?"),
                 ]),
                 Line::from(""),
@@ -122,37 +119,36 @@ impl Containers {
     }
 }
 
-impl Component for Containers {
+impl Component for Images {
     fn get_name(&self) -> &'static str {
-        "Containers"
+        "Images"
     }
 
     fn update(&mut self, action: Option<Action>) -> Result<Option<Action>> {
         match action {
             Some(Action::Refresh) => {
-                let options = ListContainersOptions {
-                    all: self.all,
+                let options = ListImagesOptions {
                     filters: self.filters.clone(),
                     ..Default::default()
                 };
 
-                self.containers = block_on(async {
+                self.images = block_on(async {
                     let docker_cli = Docker::connect_with_socket_defaults()
                         .expect("Unable to connect to docker");
-                    let containers = docker_cli
-                        .list_containers(Some(options))
+                    let images = docker_cli
+                        .list_images(Some(options))
                         .await
-                        .expect("Unable to get container list");
-                    containers
+                        .expect("Unable to list images");
+                    images
                         .iter()
-                        .map(|c| {
+                        .map(|i: &ImageSummary| {
                             [
-                                get_or_not_found!(c.id),
-                                get_or_not_found!(c.names, |c| c
-                                    .first()
-                                    .and_then(|s| s.split('/').last())),
-                                get_or_not_found!(c.image, |i| i.split('@').nth(0)),
-                                get_or_not_found!(c.state),
+                                i.id.to_string().split(':').last().unwrap()[0..12].to_string(),
+                                get_or_not_found!(i.repo_tags.first()),
+                                i.size.format_size_i(BINARY),
+                                DateTime::<Utc>::from_timestamp(i.created, 0)
+                                    .expect("Unable to parse timestamp")
+                                    .to_string(),
                             ]
                         })
                         .collect()
@@ -167,19 +163,9 @@ impl Component for Containers {
                 self.previous();
                 Ok(None)
             }
-            Some(Action::All) => {
-                self.all = !self.all;
-                Ok(None)
-            }
-            Some(Action::Inspect) => {
-                let cid = self.get_selected_container_info().map(|cinfo| {
-                    Action::Screen(Box::new(ContainerDetails::new(cinfo.0.to_string())))
-                });
-                Ok(cid)
-            }
             Some(Action::Delete) => {
-                if let Some((cid, cname)) = self.get_selected_container_info() {
-                    self.show_popup = Popup::Delete(cid, cname);
+                if let Some((id, tag)) = self.get_selected_image_info() {
+                    self.show_popup = Popup::Delete(id, tag);
                     Ok(Some(Action::Refresh))
                 } else {
                     Ok(None)
@@ -188,8 +174,8 @@ impl Component for Containers {
             Some(Action::Ok) => {
                 let show_popup = &self.show_popup;
                 match show_popup {
-                    Popup::Delete(cid, _) => {
-                        delete_container(cid)?;
+                    Popup::Delete(id, _) => {
+                        delete_image(id)?;
                         self.show_popup = Popup::None;
                         self.update(Some(Action::Refresh))
                     }
@@ -210,9 +196,9 @@ impl Component for Containers {
             .split(area);
         let t = table(
             self.get_name(),
-            ["Id", "Name", "Image", "Status"],
-            self.containers.clone(),
-            &CONTAINER_CONSTRAINTS,
+            ["Id", "Name", "Size", "Age"],
+            self.images.clone(),
+            &IMAGE_CONSTRAINTS,
         );
         f.render_stateful_widget(t, rects[0], &mut self.state);
 
@@ -220,18 +206,16 @@ impl Component for Containers {
     }
 }
 
-fn delete_container(cid: &str) -> Result<()> {
-    let options = RemoveContainerOptions {
+fn delete_image(id: &str) -> Result<()> {
+    let options = RemoveImageOptions {
         force: true,
         ..Default::default()
     };
     block_on(async {
         let docker_cli =
             Docker::connect_with_socket_defaults().expect("Unable to connect to docker");
-        docker_cli
-            .remove_container(cid, Some(options))
-            .await
-            .expect("Unable to remove container");
+        // TODO: Handle error correctly
+        let _ = docker_cli.remove_image(id, Some(options), None).await;
     });
     Ok(())
 }

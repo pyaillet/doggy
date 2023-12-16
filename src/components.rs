@@ -6,6 +6,7 @@ use crate::action::Action;
 
 pub mod container_inspect;
 pub mod containers;
+pub mod images;
 
 pub(crate) trait Component {
     fn get_name(&self) -> &'static str;
