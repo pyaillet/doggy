@@ -1,5 +1,7 @@
 # Doggy
 
+![Build](https://github.com/pyaillet/doggy/actions/workflows/rust.yml/badge.svg)
+
 Minimal TUI interface for Docker
 
 ## Preview
