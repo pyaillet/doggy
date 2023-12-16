@@ -17,7 +17,6 @@ macro_rules! get_or_not_found {
         $property
             .as_ref()
             .and_then($extractor)
-            .and_then(|s| Some(s.as_str()))
             .unwrap_or(crate::utils::NOT_FOUND)
             .to_string()
     };
@@ -48,4 +47,24 @@ pub(crate) fn table<'a, const SIZE: usize>(
         .header(header)
         .block(Block::default().borders(Borders::ALL).title("Containers"))
         .highlight_style(selected_style)
+}
+
+pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(r);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(popup_layout[1])[1]
 }

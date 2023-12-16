@@ -1,5 +1,5 @@
 use color_eyre::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 
 use crate::action::Action;
 use crate::components::containers::Containers;
@@ -49,17 +49,25 @@ impl App {
 
             let mut action = if let Event::Key(key) = event::read()? {
                 if key.kind == KeyEventKind::Press {
-                    match key.code {
-                        KeyCode::Char('q') => Some(Action::Quit),
-                        KeyCode::Char('j') | KeyCode::Down => Some(Action::Down),
-                        KeyCode::Char('k') | KeyCode::Up => Some(Action::Up),
-                        KeyCode::Char('h') | KeyCode::Left => Some(Action::Left),
-                        KeyCode::Char('l') | KeyCode::Right => Some(Action::Right),
-                        KeyCode::Char('J') | KeyCode::PageUp => Some(Action::PageUp),
-                        KeyCode::Char('K') | KeyCode::PageDown => Some(Action::PageDown),
-                        KeyCode::Char('a') => Some(Action::All),
-                        KeyCode::Char('i') => Some(Action::Inspect),
-                        KeyCode::Esc => Some(Action::PreviousScreen),
+                    match (key.code, key.modifiers) {
+                        (KeyCode::Char('q'), KeyModifiers::NONE) => Some(Action::Quit),
+                        (KeyCode::Char('j'), KeyModifiers::NONE)
+                        | (KeyCode::Down, KeyModifiers::NONE) => Some(Action::Down),
+                        (KeyCode::Char('k'), KeyModifiers::NONE)
+                        | (KeyCode::Up, KeyModifiers::NONE) => Some(Action::Up),
+                        (KeyCode::Char('h'), KeyModifiers::NONE)
+                        | (KeyCode::Left, KeyModifiers::NONE) => Some(Action::Left),
+                        (KeyCode::Char('l'), KeyModifiers::NONE)
+                        | (KeyCode::Right, KeyModifiers::NONE) => Some(Action::Right),
+                        (KeyCode::Char('J'), KeyModifiers::NONE)
+                        | (KeyCode::PageUp, KeyModifiers::NONE) => Some(Action::PageUp),
+                        (KeyCode::Char('K'), KeyModifiers::NONE)
+                        | (KeyCode::PageDown, KeyModifiers::NONE) => Some(Action::PageDown),
+                        (KeyCode::Char('a'), KeyModifiers::NONE) => Some(Action::All),
+                        (KeyCode::Char('i'), KeyModifiers::NONE) => Some(Action::Inspect),
+                        (KeyCode::Esc, KeyModifiers::NONE) => Some(Action::PreviousScreen),
+                        (KeyCode::Enter, KeyModifiers::NONE) => Some(Action::Ok),
+                        (KeyCode::Char('d'), KeyModifiers::CONTROL) => Some(Action::Delete),
                         _ => None,
                     }
                 } else {
