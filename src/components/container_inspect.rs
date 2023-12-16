@@ -87,7 +87,7 @@ impl Component for ContainerDetails {
         Ok(action)
     }
 
-    fn draw(&mut self, f: &mut Frame<'_>, _area: Rect) -> Result<()> {
+    fn draw(&mut self, f: &mut Frame<'_>, area: Rect) {
         let container_details = Paragraph::new(self.details.clone())
             .gray()
             .block(
@@ -101,7 +101,6 @@ impl Component for ContainerDetails {
             )
             .scroll((self.vertical_scroll as u16, 0));
 
-        f.render_widget(container_details, f.size());
-        Ok(())
+        f.render_widget(container_details, area);
     }
 }

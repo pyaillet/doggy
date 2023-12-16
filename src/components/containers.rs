@@ -192,7 +192,7 @@ impl Component for Containers {
         }
     }
 
-    fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> Result<()> {
+    fn draw(&mut self, f: &mut Frame<'_>, area: Rect) {
         let rects = Layout::default()
             .constraints([Constraint::Percentage(100)])
             .split(area);
@@ -204,7 +204,6 @@ impl Component for Containers {
         f.render_stateful_widget(t, rects[0], &mut self.state);
 
         self.draw_popup(f);
-        Ok(())
     }
 }
 

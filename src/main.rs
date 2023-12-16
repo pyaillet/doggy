@@ -42,11 +42,15 @@ fn teardown(mut terminal: DoggyTerminal) -> Result<()> {
     Ok(())
 }
 
+static GIT_HASH: &str = env!("GIT_HASH");
+static PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 async fn run() -> Result<()> {
     let mut terminal = setup_terminal()?;
 
+    let version: String = format!("{}@{}", PKG_VERSION, GIT_HASH);
     // create app and run it
-    let mut app = App::new();
+    let mut app = App::new(&version);
     let res = app.run_app(&mut terminal);
 
     teardown(terminal)?;
