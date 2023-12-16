@@ -49,22 +49,22 @@ pub(crate) fn table<'a, const SIZE: usize>(
         .highlight_style(selected_style)
 }
 
-pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+pub fn centered_rect(size_x: u16, size_y: u16, r: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Percentage((100 - percent_y) / 2),
-            Constraint::Percentage(percent_y),
-            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Max((r.height - size_y) / 2),
+            Constraint::Min(size_y),
+            Constraint::Max((r.height - size_y) / 2),
         ])
         .split(r);
 
     Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Percentage((100 - percent_x) / 2),
-            Constraint::Percentage(percent_x),
-            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Max((r.width - size_x) / 2),
+            Constraint::Min(size_x),
+            Constraint::Max((r.width - size_x) / 2),
         ])
         .split(popup_layout[1])[1]
 }

@@ -6,7 +6,9 @@ use color_eyre::Result;
 use futures::executor::block_on;
 use ratatui::{
     layout::{Constraint, Layout, Rect},
-    widgets::{Block, Borders, Clear, TableState},
+    style::{Style, Stylize},
+    text::{Line, Span},
+    widgets::{Block, Borders, Clear, Padding, Paragraph, TableState, Wrap},
     Frame,
 };
 
@@ -24,7 +26,7 @@ const CONTAINER_CONSTRAINTS: [Constraint; 4] = [
 
 enum Popup {
     None,
-    Delete(String),
+    Delete(String, String),
 }
 
 pub struct Containers {
@@ -74,20 +76,36 @@ impl Containers {
         self.state.select(Some(i));
     }
 
-    fn get_selected_container_id(&self) -> Option<String> {
+    fn get_selected_container_info(&self) -> Option<(String, String)> {
         self.state
             .selected()
             .and_then(|i| self.containers.get(i))
-            .and_then(|c| c.first())
-            .cloned()
+            .and_then(|c| {
+                c.first()
+                    .and_then(|cid| c.get(1).map(|cname| (cid.to_owned(), cname.to_owned())))
+            })
     }
 
     fn draw_popup(&self, f: &mut Frame<'_>) {
-        if let Popup::Delete(_cid) = &self.show_popup {
-            let block = Block::default().title("Confirmation").borders(Borders::ALL);
-            let area = centered_rect(60, 20, f.size());
+        if let Popup::Delete(_cid, cname) = &self.show_popup {
+            let text = vec![
+                Line::from(vec![
+                    Span::raw("Are you sure you want to delete container: \""),
+                    Span::styled(cname, Style::new().gray()),
+                    Span::raw("\"?"),
+                ]),
+                Line::from(""),
+                Line::from("ESC to Cancel, Enter to Confirm".gray()),
+            ];
+            let paragraph = Paragraph::new(text).wrap(Wrap { trim: false });
+
+            let block = Block::default()
+                .title("Confirmation")
+                .padding(Padding::new(1, 1, 1, 1))
+                .borders(Borders::ALL);
+            let area = centered_rect(50, 8, f.size());
             f.render_widget(Clear, area); //this clears out the background
-            f.render_widget(block, area);
+            f.render_widget(paragraph.block(block), area);
         }
     }
 }
@@ -142,14 +160,14 @@ impl Component for Containers {
                 Ok(None)
             }
             Some(Action::Inspect) => {
-                let cid = self
-                    .get_selected_container_id()
-                    .map(|cid| Action::Screen(Box::new(ContainerDetails::new(cid.to_string()))));
+                let cid = self.get_selected_container_info().map(|cinfo| {
+                    Action::Screen(Box::new(ContainerDetails::new(cinfo.0.to_string())))
+                });
                 Ok(cid)
             }
             Some(Action::Delete) => {
-                if let Some(cid) = self.get_selected_container_id() {
-                    self.show_popup = Popup::Delete(cid);
+                if let Some((cid, cname)) = self.get_selected_container_info() {
+                    self.show_popup = Popup::Delete(cid, cname);
                     Ok(Some(Action::Refresh))
                 } else {
                     Ok(None)
@@ -158,7 +176,7 @@ impl Component for Containers {
             Some(Action::Ok) => {
                 let show_popup = &self.show_popup;
                 match show_popup {
-                    Popup::Delete(cid) => {
+                    Popup::Delete(cid, _) => {
                         delete_container(cid)?;
                         self.show_popup = Popup::None;
                         Ok(Some(Action::Refresh))
