@@ -1,7 +1,8 @@
 use color_eyre::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::layout::{Constraint, Direction, Layout};
-use ratatui::style::Stylize;
+use ratatui::style::{Style, Stylize};
+use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 
 use crate::action::Action;
@@ -16,12 +17,18 @@ enum InputMode {
     //TODO Filter
 }
 
+const CONTAINERS: &str = "containers";
+const IMAGES: &str = "images";
+
+const SUGGESTIONS: [&str; 2] = [CONTAINERS, IMAGES];
+
 pub(crate) struct App<'a> {
     should_quit: bool,
     main: Box<dyn Component>,
     input: String,
     input_mode: InputMode,
     cursor_position: usize,
+    suggestion: Option<&'static str>,
     version: &'a str,
 }
 
@@ -32,6 +39,7 @@ impl<'a> App<'a> {
             main: Box::new(Containers::new()),
             input: "".to_string(),
             input_mode: InputMode::None,
+            suggestion: None,
             cursor_position: 0,
             version,
         }
@@ -61,7 +69,7 @@ impl<'a> App<'a> {
         while !self.should_quit {
             let main_layout = Layout::default()
                 .direction(Direction::Vertical)
-                .constraints([Constraint::Max(4), Constraint::Min(5), Constraint::Max(1)])
+                .constraints([Constraint::Max(3), Constraint::Min(5), Constraint::Max(1)])
                 .split(terminal.get_frame().size());
 
             log::debug!("{:?}", main_layout);
@@ -93,12 +101,25 @@ impl<'a> App<'a> {
     fn draw_header(&self, f: &mut ratatui::prelude::Frame<'_>, rect: ratatui::prelude::Rect) {
         match self.input_mode {
             InputMode::None => {
-                let p = Paragraph::new("TODO".red());
+                let p = Paragraph::new("Welcome to Doggy!");
                 f.render_widget(p, rect)
             }
             InputMode::Change => {
-                let input = Paragraph::new(self.input.as_str())
-                    .block(Block::default().borders(Borders::ALL).title("Input"));
+                let input = Paragraph::new(Line::from(if let Some(suggestion) = self.suggestion {
+                    vec![
+                        Span::styled(self.input.to_string(), Style::default().gray()),
+                        Span::styled(
+                            suggestion[self.cursor_position..].to_string(),
+                            Style::default().dark_gray(),
+                        ),
+                    ]
+                } else {
+                    vec![Span::styled(
+                        self.input.to_string(),
+                        Style::default().gray(),
+                    )]
+                }))
+                .block(Block::default().borders(Borders::ALL).title("Input"));
                 f.render_widget(input, rect);
             }
         }
@@ -162,6 +183,7 @@ impl<'a> App<'a> {
                     KeyCode::Enter => self.submit_input(),
                     KeyCode::Char(to_insert) => {
                         self.enter_char(to_insert);
+                        self.suggestion = self.update_suggestion();
                         None
                     }
                     KeyCode::Backspace => {
@@ -194,12 +216,12 @@ impl<'a> App<'a> {
     }
 
     fn submit_input(&mut self) -> Option<Action> {
-        match self.input.as_str() {
-            "containers" => {
+        match self.suggestion {
+            Some(CONTAINERS) => {
                 self.reset_input();
                 Some(Action::Screen(Box::new(Containers::new())))
             }
-            "images" => {
+            Some(IMAGES) => {
                 self.reset_input();
                 Some(Action::Screen(Box::new(Images::new())))
             }
@@ -211,6 +233,12 @@ impl<'a> App<'a> {
         self.input = "".to_string();
         self.cursor_position = 0;
         self.input_mode = InputMode::None;
+    }
+
+    fn update_suggestion(&self) -> Option<&'static str> {
+        SUGGESTIONS
+            .into_iter()
+            .find(|searched| searched.starts_with(&self.input))
     }
 }
 
