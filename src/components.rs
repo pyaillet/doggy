@@ -4,6 +4,7 @@ use color_eyre::Result;
 
 use crate::action::Action;
 
+pub mod container_exec;
 pub mod container_inspect;
 pub mod containers;
 pub mod images;

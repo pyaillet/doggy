@@ -91,8 +91,8 @@ impl<'a> App<'a> {
             action = self.main.update(action)?;
 
             log::debug!("Action after component processing: {:?}", action);
-            if let Some(ignored_action) = self.update(action)? {
-                log::warn!("Ignored action: {}", ignored_action);
+            while action.is_some() {
+                action = self.update(action)?;
             }
         }
         Ok(())
@@ -262,6 +262,7 @@ fn handle_event() -> Result<Option<Action>, color_eyre::eyre::Error> {
                     | (KeyCode::PageDown, KeyModifiers::NONE) => Some(Action::PageDown),
                     (KeyCode::Char('a'), KeyModifiers::NONE) => Some(Action::All),
                     (KeyCode::Char('i'), KeyModifiers::NONE) => Some(Action::Inspect),
+                    (KeyCode::Char('s'), KeyModifiers::NONE) => Some(Action::Shell),
                     (KeyCode::Esc, KeyModifiers::NONE) => Some(Action::PreviousScreen),
                     (KeyCode::Enter, KeyModifiers::NONE) => Some(Action::Ok),
                     (KeyCode::Char('d'), KeyModifiers::CONTROL) => Some(Action::Delete),
