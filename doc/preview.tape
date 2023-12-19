@@ -43,7 +43,7 @@ Escape
 
 Type ":"
 Sleep 500ms
-Type "images"
+Type "im"
 
 Sleep 1s
 
@@ -56,5 +56,11 @@ PageDown
 
 # Admire the output for a bit.
 Sleep 2s
+
+Type ":"
+Sleep 1s
+
+Type "cont"
+Sleep 1s
 
 Type "q"
