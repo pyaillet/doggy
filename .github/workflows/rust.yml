@@ -39,6 +39,6 @@ jobs:
       - name: Install Rust
         run: rustup update stable
       - name: Install toolchains
-        run: rustup toolchain install stable-${{ matrix.target }}
+        run: rustup target add ${{ matrix.target }}
       - name: cross build
         run: cargo build --target ${{ matrix.target }}
