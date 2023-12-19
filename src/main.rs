@@ -31,13 +31,16 @@ fn setup_terminal() -> Result<DoggyTerminal> {
 
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
+
     let backend = CrosstermBackend::new(stdout);
-    let t = Terminal::new(backend)?;
+    let mut t = Terminal::new(backend)?;
+
+    t.clear().expect("Unable to clear terminal");
+
     Ok(t)
 }
 
 fn teardown(mut terminal: DoggyTerminal) -> Result<()> {
-    // restore terminal
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;

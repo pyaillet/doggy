@@ -66,7 +66,9 @@ impl Component for ContainerDetails {
         action: Option<crate::action::Action>,
     ) -> Result<Option<crate::action::Action>> {
         let action = match action {
-            Some(Action::PreviousScreen) => Some(Action::Screen(Box::new(Containers::new()))),
+            Some(Action::PreviousScreen) => {
+                Some(Action::Screen(Box::new(Containers::new()), false))
+            }
             Some(Action::Up) => {
                 self.up(1);
                 None

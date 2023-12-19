@@ -20,6 +20,8 @@ use crate::utils::get_or_not_found;
 use crate::{action::Action, utils::centered_rect};
 use crate::{components::container_inspect::ContainerDetails, utils::table};
 
+use super::container_exec::ContainerExec;
+
 const CONTAINER_CONSTRAINTS: [Constraint; 4] = [
     Constraint::Min(14),
     Constraint::Max(30),
@@ -172,13 +174,22 @@ impl Component for Containers {
                 Ok(self.update(Some(Action::Refresh))?)
             }
             Some(Action::Inspect) => {
-                let cid = self.get_selected_container_info().map(|cinfo| {
-                    Action::Screen(Box::new(ContainerDetails::new(
-                        cinfo.0.to_string(),
-                        cinfo.1.to_string(),
-                    )))
+                let action = self.get_selected_container_info().map(|cinfo| {
+                    Action::Screen(
+                        Box::new(ContainerDetails::new(
+                            cinfo.0.to_string(),
+                            cinfo.1.to_string(),
+                        )),
+                        false,
+                    )
                 });
-                Ok(cid)
+                Ok(action)
+            }
+            Some(Action::Shell) => {
+                let action = self.get_selected_container_info().map(|cinfo| {
+                    Action::Screen(Box::new(ContainerExec::new_with_default(cinfo.0)), false)
+                });
+                Ok(action)
             }
             Some(Action::Delete) => {
                 if let Some((cid, cname)) = self.get_selected_container_info() {
