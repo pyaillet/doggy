@@ -41,4 +41,4 @@ jobs:
       - name: Install toolchains
         run: rustup toolchain install stable-${{ matrix.target }}
       - name: cross build
-        run: cargo --target ${{ matrix.target }} build
+        run: cargo build --target ${{ matrix.target }}
