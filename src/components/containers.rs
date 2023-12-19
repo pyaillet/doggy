@@ -175,16 +175,19 @@ impl Component for Containers {
             }
             Some(Action::Inspect) => {
                 let action = self.get_selected_container_info().map(|cinfo| {
-                    Action::Screen(Box::new(ContainerDetails::new(
-                        cinfo.0.to_string(),
-                        cinfo.1.to_string(),
-                    )))
+                    Action::Screen(
+                        Box::new(ContainerDetails::new(
+                            cinfo.0.to_string(),
+                            cinfo.1.to_string(),
+                        )),
+                        false,
+                    )
                 });
                 Ok(action)
             }
             Some(Action::Shell) => {
                 let action = self.get_selected_container_info().map(|cinfo| {
-                    Action::Screen(Box::new(ContainerExec::new_with_default(cinfo.0)))
+                    Action::Screen(Box::new(ContainerExec::new_with_default(cinfo.0)), false)
                 });
                 Ok(action)
             }

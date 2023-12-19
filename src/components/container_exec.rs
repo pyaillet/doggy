@@ -1,21 +1,24 @@
-use std::io::{stdin, Read, Write};
+use std::io::Write;
 
 use bollard::exec::{CreateExecOptions, ResizeExecOptions, StartExecResults};
 use bollard::Docker;
 use color_eyre::Result;
 
-use futures::executor::block_on;
-use futures::StreamExt;
+use crossterm::cursor::MoveTo;
+use crossterm::terminal::{Clear, ClearType};
+use crossterm::ExecutableCommand;
 use ratatui::prelude::*;
 
-use tokio::io::AsyncWriteExt;
+use futures::executor::block_on;
+use futures::StreamExt;
+use tokio::io::{stdin, AsyncReadExt, AsyncWriteExt};
+use tokio::select;
 use tokio::sync::oneshot::channel;
 use tokio::task::spawn;
 
 use crate::action::Action;
 use crate::components::containers::Containers;
 use crate::components::Component;
-use crate::utils::clear_terminal;
 
 const DEFAULT_CMD: &str = "/bin/bash";
 
@@ -45,6 +48,7 @@ impl Component for ContainerExec {
             let docker = Docker::connect_with_socket_defaults().unwrap();
 
             let tty_size = crossterm::terminal::size().expect("Unable to get tty size");
+            let mut stdout = std::io::stdout();
 
             let exec = docker
                 .create_exec(
@@ -74,14 +78,21 @@ impl Component for ContainerExec {
 
                 // pipe stdin into the docker exec stream input
                 let handle = spawn(async move {
-                    while rx.try_recv().is_err() {
-                        let mut buf: [u8; 1] = [0];
-                        stdin()
-                            .read_exact(&mut buf)
-                            .expect("Unable to read from stdin");
-                        input.write(&buf).await.ok();
+                    let mut buf: [u8; 1] = [0];
+                    let mut should_stop = false;
+                    let mut stdin = stdin();
+                    while !should_stop {
+                        select!(
+                            _ = &mut rx => { should_stop = true; },
+                            _ = stdin.read(&mut buf) => { input.write(&buf).await.ok(); }
+                        );
                     }
                 });
+
+                stdout.execute(MoveTo(0, 0)).expect("Unable to move cursor");
+                stdout
+                    .execute(Clear(ClearType::All))
+                    .expect("Unable to clear screen");
 
                 docker
                     .resize_exec(
@@ -94,9 +105,6 @@ impl Component for ContainerExec {
                     .await
                     .expect("Unable to resize exec");
 
-                clear_terminal();
-
-                let mut stdout = std::io::stdout();
                 // pipe docker exec output into stdout
                 while let Some(Ok(output)) = output.next().await {
                     stdout
@@ -105,13 +113,12 @@ impl Component for ContainerExec {
                     stdout.flush().expect("Unable to flush");
                 }
 
-                tx.send("Close").expect("Unable to send close command");
+                log::debug!("Closing terminal");
+                tx.send(0).expect("Unable to send close command");
                 handle.await.expect("Error waiting for thread termination");
-
-                clear_terminal();
             }
         });
-        Ok(Some(Action::Screen(Box::new(Containers::new()))))
+        Ok(Some(Action::Screen(Box::new(Containers::new()), true)))
     }
 
     fn draw(&mut self, _f: &mut Frame<'_>, _area: Rect) {}

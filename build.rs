@@ -5,6 +5,6 @@ fn main() {
         .args(["rev-parse", "HEAD"])
         .output()
         .unwrap();
-    let git_hash = &String::from_utf8(output.stdout).unwrap()[0..12];
+    let git_hash = &String::from_utf8(output.stdout).unwrap()[0..7];
     println!("cargo:rustc-env=GIT_HASH={}", git_hash);
 }

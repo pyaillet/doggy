@@ -45,15 +45,23 @@ impl<'a> App<'a> {
         }
     }
 
-    pub fn update(&mut self, action: Option<Action>) -> Result<Option<Action>> {
+    pub fn update(
+        &mut self,
+        action: Option<Action>,
+        terminal: &mut DoggyTerminal,
+    ) -> Result<Option<Action>> {
         match action {
             Some(Action::Quit) => {
                 self.should_quit = true;
                 Ok(None)
             }
-            Some(Action::Screen(screen)) => {
+            Some(Action::Screen(screen, refresh)) => {
                 self.main = screen;
-                self.main.update(Some(Action::Refresh))
+                let action = self.main.update(Some(Action::Refresh));
+                if refresh {
+                    terminal.clear()?;
+                }
+                action
             }
             Some(Action::Change) => {
                 self.input_mode = InputMode::Change;
@@ -92,7 +100,7 @@ impl<'a> App<'a> {
 
             log::debug!("Action after component processing: {:?}", action);
             while action.is_some() {
-                action = self.update(action)?;
+                action = self.update(action, terminal)?;
             }
         }
         Ok(())
@@ -219,11 +227,11 @@ impl<'a> App<'a> {
         match self.suggestion {
             Some(CONTAINERS) => {
                 self.reset_input();
-                Some(Action::Screen(Box::new(Containers::new())))
+                Some(Action::Screen(Box::new(Containers::new()), false))
             }
             Some(IMAGES) => {
                 self.reset_input();
-                Some(Action::Screen(Box::new(Images::new())))
+                Some(Action::Screen(Box::new(Images::new()), false))
             }
             _ => None,
         }

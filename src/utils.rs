@@ -69,12 +69,3 @@ pub fn centered_rect(size_x: u16, size_y: u16, r: Rect) -> Rect {
         ])
         .split(popup_layout[1])[1]
 }
-
-pub fn clear_terminal() {
-    // set stdout in raw mode so we can do tty stuff
-    let stdout = std::io::stdout();
-
-    let backend = CrosstermBackend::new(stdout);
-    let mut t = Terminal::new(backend).expect("Unable to attach terminal to backend");
-    t.clear().expect("Unable to clear terminal");
-}
