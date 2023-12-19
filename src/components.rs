@@ -8,6 +8,7 @@ pub mod container_exec;
 pub mod container_inspect;
 pub mod containers;
 pub mod images;
+pub mod volumes;
 
 pub(crate) trait Component {
     fn get_name(&self) -> &'static str;

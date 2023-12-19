@@ -8,6 +8,7 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 use crate::action::Action;
 use crate::components::containers::Containers;
 use crate::components::images::Images;
+use crate::components::volumes::Volumes;
 use crate::components::Component;
 use crate::DoggyTerminal;
 
@@ -19,8 +20,9 @@ enum InputMode {
 
 const CONTAINERS: &str = "containers";
 const IMAGES: &str = "images";
+const VOLUMES: &str = "volumes";
 
-const SUGGESTIONS: [&str; 2] = [CONTAINERS, IMAGES];
+const SUGGESTIONS: [&str; 3] = [CONTAINERS, IMAGES, VOLUMES];
 
 pub(crate) struct App<'a> {
     should_quit: bool,
@@ -232,6 +234,10 @@ impl<'a> App<'a> {
             Some(IMAGES) => {
                 self.reset_input();
                 Some(Action::Screen(Box::new(Images::new()), false))
+            }
+            Some(VOLUMES) => {
+                self.reset_input();
+                Some(Action::Screen(Box::new(Volumes::new()), false))
             }
             _ => None,
         }
