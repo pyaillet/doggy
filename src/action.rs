@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::components::Component;
 
-pub enum Action {
+pub(crate) enum Action {
     Refresh,
     Down,
     Up,

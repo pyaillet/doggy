@@ -24,3 +24,21 @@ jobs:
       run: cargo clippy
     - name: Run tests
       run: cargo test --verbose
+  cross-build:
+    needs: build
+    strategy:
+      matrix:
+        target:
+          - aarch64-unknown-linux-gnu
+          - x86_64-unknown-linux-gnu
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        run: rustup update stable
+      - name: Install cross-compilation tools
+        uses: taiki-e/setup-cross-toolchain-action@v1
+        with:
+          target: ${{ matrix.target }}
+      - name: cross build
+        run: cargo build --target ${{ matrix.target }}
