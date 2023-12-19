@@ -29,16 +29,16 @@ jobs:
     strategy:
       matrix:
         target:
-          - aarch64-unknown-linux-gnu
-          - aarch64-apple-darwin
-          - x86_64-unknown-linux-gnu
-          - x86_64-apple-darwin
+          - stable-aarch64-unknown-linux-gnu
+          - stable-aarch64-apple-darwin
+          - stable-x86_64-unknown-linux-gnu
+          - stable-x86_64-apple-darwin
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust
         run: rustup update stable
       - name: Install toolchains
-        run: rustup toolchain install stable-${{ matrix.target }}
+        run: rustup toolchain install ${{ matrix.target }}
       - name: cross build
         run: cargo +${{ matrix.target }} build
