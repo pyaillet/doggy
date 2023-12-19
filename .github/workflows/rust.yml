@@ -38,7 +38,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Rust
         run: rustup update stable
-      - name: Install toolchains
-        run: rustup target add ${{ matrix.target }}
+      - name: Install cross-compilation tools
+        uses: taiki-e/setup-cross-toolchain-action@v1
+        with:
+          target: ${{ matrix.target }}
       - name: cross build
         run: cargo build --target ${{ matrix.target }}
