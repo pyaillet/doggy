@@ -23,7 +23,7 @@ Build it on your own:
 
 ## Usage
 
-- Change view: `:` and resource name (`containers` or `images`)
+- Change view: `:` and resource name (`containers`, `images`, `networks`, `volumes`)
 - Inspect container: `i` 
 - Delete a resource: `Ctrl+d`
 - Browse lists:
@@ -40,6 +40,6 @@ Build it on your own:
 - [x] List images
 - [ ] Filter the image list
 - [x] Delete images (not used by any container)
-- [ ] List networks
-- [ ] List volumes
+- [x] List networks
+- [x] List volumes
 
