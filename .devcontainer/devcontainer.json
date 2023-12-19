@@ -1,0 +1,15 @@
+{
+	"name": "my-project-devcontainer",
+	"image": "mcr.microsoft.com/devcontainers/base:ubuntu",  // Any generic, debian-based image.
+	"features": {
+		"ghcr.io/devcontainers/features/rust:1": {},
+    	"ghcr.io/devcontainers/features/docker-in-docker:2.7.1": {
+	    	"version": "latest",
+		    "moby": true
+    	},
+		"ghcr.io/devcontainers/features/common-utils:2": {
+			"installZsh": true,
+			"installOhMyZsh": true
+		}
+	}
+}
