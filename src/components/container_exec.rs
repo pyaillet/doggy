@@ -4,7 +4,7 @@ use bollard::exec::{CreateExecOptions, ResizeExecOptions, StartExecResults};
 use bollard::Docker;
 use color_eyre::Result;
 
-use crossterm::cursor::MoveTo;
+use crossterm::cursor::{self, MoveTo};
 use crossterm::terminal::{Clear, ClearType};
 use crossterm::ExecutableCommand;
 use ratatui::prelude::*;
@@ -93,6 +93,7 @@ impl Component for ContainerExec {
                 stdout
                     .execute(Clear(ClearType::All))
                     .expect("Unable to clear screen");
+                stdout.execute(cursor::Show).expect("Unable to show cursor");
 
                 docker
                     .resize_exec(
