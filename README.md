@@ -25,6 +25,7 @@ Build it on your own:
 
 - Change view: `:` and resource name (`containers`, `images`, `networks`, `volumes`)
 - Inspect container: `i` 
+- Launch `/bin/bash` in the container: `s` (Error handling should be improved #22)
 - Delete a resource: `Ctrl+d`
 - Browse lists:
   - Up: `↑` or `j`
