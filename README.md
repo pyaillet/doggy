@@ -12,10 +12,12 @@ Check a preview of the TUI:
 
 ## How to use?
 
-The project being in early development stage, there are no release available.
-However, you can use it by building it on your own
+### Using the releases
 
-Build it on your own:
+You can download one of the binary from the release page
+- https://github.com/pyaillet/doggy/releases/latest
+
+### Build it on your own:
 
 - Install Rust (see [here](https://www.rust-lang.org/tools/install))
 - Build the tool: `cargo build --release`
@@ -24,6 +26,7 @@ Build it on your own:
 ## Usage
 
 - Change view: `:` and resource name (`containers`, `images`, `networks`, `volumes`)
+- Show/hide stopped containers: `a`
 - Inspect container: `i` 
 - Launch `/bin/bash` in the container: `s` (Error handling should be improved #22)
 - Delete a resource: `Ctrl+d`
@@ -32,15 +35,19 @@ Build it on your own:
   - Down: `↓` or `k`
 - Previous view: `Esc`
 
-## What's working?
+## What's working? (on the main branch)
 
 - [x] List containers
+- [x] Display the stopped containers
 - [ ] Filter the container list
 - [x] Inspect containers
+- [x] Exec `/bin/bash` in a container
 - [x] Delete containers (running or stopped)
 - [x] List images
 - [ ] Filter the image list
 - [x] Delete images (not used by any container)
 - [x] List networks
+- [x] Delete network
 - [x] List volumes
+- [x] Delete volume
 
