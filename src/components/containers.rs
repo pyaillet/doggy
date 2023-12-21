@@ -14,13 +14,12 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Padding, Paragraph, TableState, Wrap},
     Frame,
 };
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::components::Component;
 use crate::utils::get_or_not_found;
+use crate::utils::table;
 use crate::{action::Action, utils::centered_rect};
-use crate::{components::container_inspect::ContainerDetails, utils::table};
-
-use super::container_exec::ContainerExec;
 
 const CONTAINER_CONSTRAINTS: [Constraint; 4] = [
     Constraint::Min(14),
@@ -29,6 +28,7 @@ const CONTAINER_CONSTRAINTS: [Constraint; 4] = [
     Constraint::Min(14),
 ];
 
+#[derive(Clone, Debug)]
 enum Popup {
     None,
     Delete(String, String),
@@ -40,6 +40,7 @@ pub struct Containers {
     state: TableState,
     containers: Vec<[String; 4]>,
     show_popup: Popup,
+    action_tx: Option<UnboundedSender<Action>>,
 }
 
 impl Containers {
@@ -50,6 +51,7 @@ impl Containers {
             state: Default::default(),
             containers: Vec::new(),
             show_popup: Popup::None,
+            action_tx: None,
         }
     }
 
@@ -129,9 +131,17 @@ impl Component for Containers {
         "Containers"
     }
 
-    fn update(&mut self, action: Option<Action>) -> Result<Option<Action>> {
-        match action {
-            Some(Action::Refresh) => {
+    fn register_action_handler(&mut self, tx: UnboundedSender<Action>) {
+        self.action_tx = Some(tx);
+    }
+
+    fn update(&mut self, action: Action) -> Result<()> {
+        let tx = self
+            .action_tx
+            .clone()
+            .expect("Action tx queue not initialized");
+        match (action, self.show_popup.clone()) {
+            (Action::Tick, Popup::None) => {
                 let options = ListContainersOptions {
                     all: self.all,
                     filters: self.filters.clone(),
@@ -139,83 +149,71 @@ impl Component for Containers {
                 };
 
                 self.containers = block_on(async {
-                    let docker_cli = Docker::connect_with_socket_defaults()
-                        .expect("Unable to connect to docker");
-                    let containers = docker_cli
-                        .list_containers(Some(options))
-                        .await
-                        .expect("Unable to get container list");
-                    containers
-                        .iter()
-                        .map(|c| {
-                            [
-                                get_or_not_found!(c.id),
-                                get_or_not_found!(c.names, |c| c
-                                    .first()
-                                    .and_then(|s| s.split('/').last())),
-                                get_or_not_found!(c.image, |i| i.split('@').nth(0)),
-                                get_or_not_found!(c.state),
-                            ]
-                        })
-                        .collect()
+                    match list_containers(Some(options)).await {
+                        Ok(containers) => containers,
+                        Err(e) => {
+                            tx.send(Action::Error(format!(
+                                "Error getting container list: {}",
+                                e
+                            )))
+                            .expect("Unable to send message");
+                            vec![]
+                        }
+                    }
                 });
-                Ok(None)
             }
-            Some(Action::Down) => {
+            (Action::Down, Popup::None) => {
                 self.next();
-                Ok(None)
             }
-            Some(Action::Up) => {
+            (Action::Up, Popup::None) => {
                 self.previous();
-                Ok(None)
             }
-            Some(Action::All) => {
+            (Action::All, Popup::None) => {
                 self.all = !self.all;
-                Ok(self.update(Some(Action::Refresh))?)
             }
-            Some(Action::Inspect) => {
-                let action = self.get_selected_container_info().map(|cinfo| {
-                    Action::Screen(
-                        Box::new(ContainerDetails::new(
-                            cinfo.0.to_string(),
-                            cinfo.1.to_string(),
-                        )),
-                        false,
-                    )
-                });
-                Ok(action)
+            (Action::Inspect, Popup::None) => {
+                if let Some(action) = self.get_selected_container_info().map(|cinfo| {
+                    Action::Screen(super::ComponentInit::ContainerInspect(
+                        cinfo.0.to_string(),
+                        cinfo.1.to_string(),
+                    ))
+                }) {
+                    tx.send(action)?;
+                }
             }
-            Some(Action::Shell) => {
-                let action = self.get_selected_container_info().map(|cinfo| {
-                    Action::Screen(Box::new(ContainerExec::new_with_default(cinfo.0)), false)
-                });
-                Ok(action)
+            (Action::Shell, Popup::None) => {
+                if let Some(action) = self
+                    .get_selected_container_info()
+                    .map(|cinfo| Action::Screen(super::ComponentInit::ContainerExec(cinfo.0, None)))
+                {
+                    tx.send(Action::Suspend)?;
+                    tx.send(action)?;
+                }
             }
-            Some(Action::Delete) => {
+            (Action::Delete, Popup::None) => {
                 if let Some((cid, cname)) = self.get_selected_container_info() {
                     self.show_popup = Popup::Delete(cid, cname);
-                    Ok(Some(Action::Refresh))
-                } else {
-                    Ok(None)
                 }
             }
-            Some(Action::Ok) => {
-                let show_popup = &self.show_popup;
-                match show_popup {
-                    Popup::Delete(cid, _) => {
-                        delete_container(cid)?;
+            (Action::Ok, Popup::Delete(cid, _)) => {
+                block_on(async {
+                    if let Err(e) = delete_container(&cid).await {
+                        tx.send(Action::Error(format!(
+                            "Unable to delete container \"{}\" {}",
+                            cid, e
+                        )))
+                        .expect("Unable to send error");
+                    } else {
                         self.show_popup = Popup::None;
-                        self.update(Some(Action::Refresh))
                     }
-                    _ => Ok(None),
-                }
+                });
             }
-            Some(Action::PreviousScreen) => {
+            (Action::PreviousScreen, Popup::Delete(_, _)) => {
                 self.show_popup = Popup::None;
-                Ok(Some(Action::Refresh))
             }
-            _ => Ok(action),
+            _ => {}
         }
+        Ok(())
     }
 
     fn draw(&mut self, f: &mut Frame<'_>, area: Rect) {
@@ -223,7 +221,11 @@ impl Component for Containers {
             .constraints([Constraint::Percentage(100)])
             .split(area);
         let t = table(
-            self.get_name(),
+            format!(
+                "{} ({})",
+                self.get_name(),
+                if self.all { "All" } else { "Running" }
+            ),
             ["Id", "Name", "Image", "Status"],
             self.containers.clone(),
             &CONTAINER_CONSTRAINTS,
@@ -234,18 +236,34 @@ impl Component for Containers {
     }
 }
 
-fn delete_container(cid: &str) -> Result<()> {
+async fn delete_container(cid: &str) -> Result<()> {
     let options = RemoveContainerOptions {
         force: true,
         ..Default::default()
     };
-    block_on(async {
-        let docker_cli =
-            Docker::connect_with_socket_defaults().expect("Unable to connect to docker");
-        docker_cli
-            .remove_container(cid, Some(options))
-            .await
-            .expect("Unable to remove container");
-    });
+    let docker_cli = Docker::connect_with_socket_defaults()?;
+    docker_cli.remove_container(cid, Some(options)).await?;
     Ok(())
+}
+
+async fn list_containers(
+    options: Option<ListContainersOptions<String>>,
+) -> Result<Vec<[String; 4]>> {
+    let docker_cli = Docker::connect_with_socket_defaults().expect("Unable to connect to docker");
+    let containers = docker_cli
+        .list_containers(options)
+        .await
+        .expect("Unable to get container list");
+    let containers = containers
+        .iter()
+        .map(|c| {
+            [
+                get_or_not_found!(c.id),
+                get_or_not_found!(c.names, |c| c.first().and_then(|s| s.split('/').last())),
+                get_or_not_found!(c.image, |i| i.split('@').next()),
+                get_or_not_found!(c.state),
+            ]
+        })
+        .collect();
+    Ok(containers)
 }

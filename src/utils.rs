@@ -54,7 +54,7 @@ use tracing_error::ErrorLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
 pub(crate) fn table<'a, const SIZE: usize>(
-    title: &'a str,
+    title: String,
     headers: [&'a str; SIZE],
     items: Vec<[String; SIZE]>,
     constraints: &'static [Constraint; SIZE],
@@ -112,7 +112,6 @@ pub fn initialize_panic_handler() -> Result<()> {
         .into_hooks();
     eyre_hook.install()?;
     std::panic::set_hook(Box::new(move |panic_info| {
-        // TODO: Fix the reference to terminal
         if let Ok(mut t) = crate::tui::Tui::new() {
             if let Err(r) = t.exit() {
                 error!("Unable to exit Terminal: {:?}", r);
@@ -173,7 +172,7 @@ pub fn initialize_logging() -> Result<()> {
         "RUST_LOG",
         std::env::var("RUST_LOG")
             .or_else(|_| std::env::var(LOG_ENV.clone()))
-            .unwrap_or_else(|_| format!("{}=info", env!("CARGO_CRATE_NAME"))),
+            .unwrap_or_else(|_| format!("{}=debug", env!("CARGO_CRATE_NAME"))),
     );
     let file_subscriber = tracing_subscriber::fmt::layer()
         .with_file(true)

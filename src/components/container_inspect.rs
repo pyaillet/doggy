@@ -9,11 +9,9 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, ScrollbarState},
     Frame,
 };
+use tokio::sync::mpsc::UnboundedSender;
 
-use crate::{
-    action::Action,
-    components::{containers::Containers, Component},
-};
+use crate::{action::Action, components::Component};
 
 pub struct ContainerDetails {
     cid: String,
@@ -21,6 +19,7 @@ pub struct ContainerDetails {
     details: String,
     vertical_scroll_state: ScrollbarState,
     vertical_scroll: usize,
+    action_tx: Option<UnboundedSender<Action>>,
 }
 
 impl ContainerDetails {
@@ -42,6 +41,7 @@ impl ContainerDetails {
             details,
             vertical_scroll_state: Default::default(),
             vertical_scroll: 0,
+            action_tx: None,
         }
     }
 
@@ -61,34 +61,32 @@ impl Component for ContainerDetails {
         "ContainerDetails"
     }
 
-    fn update(
-        &mut self,
-        action: Option<crate::action::Action>,
-    ) -> Result<Option<crate::action::Action>> {
-        let action = match action {
-            Some(Action::PreviousScreen) => {
-                Some(Action::Screen(Box::new(Containers::new()), false))
+    fn register_action_handler(&mut self, tx: UnboundedSender<Action>) {
+        self.action_tx = Some(tx);
+    }
+
+    fn update(&mut self, action: Action) -> Result<()> {
+        match action {
+            Action::PreviousScreen => {
+                if let Some(tx) = self.action_tx.clone() {
+                    tx.send(Action::Screen(super::ComponentInit::Containers))?;
+                }
             }
-            Some(Action::Up) => {
+            Action::Up => {
                 self.up(1);
-                None
             }
-            Some(Action::Down) => {
+            Action::Down => {
                 self.down(1);
-                None
             }
-            Some(Action::PageUp) => {
+            Action::PageUp => {
                 self.up(15);
-                None
             }
-            Some(Action::PageDown) => {
+            Action::PageDown => {
                 self.down(15);
-                None
             }
-            Some(action) => Some(action),
-            _ => None,
+            _ => {}
         };
-        Ok(action)
+        Ok(())
     }
 
     fn draw(&mut self, f: &mut Frame<'_>, area: Rect) {
