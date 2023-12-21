@@ -1,5 +1,8 @@
+use std::io::Stderr;
+
 use color_eyre::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Span};
@@ -11,7 +14,6 @@ use crate::components::images::Images;
 use crate::components::networks::Networks;
 use crate::components::volumes::Volumes;
 use crate::components::Component;
-use crate::DoggyTerminal;
 
 enum InputMode {
     None,
@@ -52,7 +54,7 @@ impl<'a> App<'a> {
     pub fn update(
         &mut self,
         action: Option<Action>,
-        terminal: &mut DoggyTerminal,
+        terminal: &mut ratatui::Terminal<CrosstermBackend<Stderr>>,
     ) -> Result<Option<Action>> {
         match action {
             Some(Action::Quit) => {
@@ -75,7 +77,10 @@ impl<'a> App<'a> {
         }
     }
 
-    pub fn run_app(&mut self, terminal: &mut DoggyTerminal) -> Result<()> {
+    pub fn run_app(
+        &mut self,
+        terminal: &mut ratatui::Terminal<CrosstermBackend<Stderr>>,
+    ) -> Result<()> {
         log::debug!("Updating component: {}", self.main.get_name());
         self.main.update(Some(Action::Refresh))?;
         while !self.should_quit {

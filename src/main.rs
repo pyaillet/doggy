@@ -1,38 +1,28 @@
-use std::{
-    io::{self, Stdout},
-    panic::set_hook,
-};
+use std::io;
 
 use app::App;
 use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use log::LevelFilter;
-use log4rs::{
-    append::file::FileAppender,
-    config::{Appender, Root},
-    encode::pattern::PatternEncoder,
-    Config,
-};
 use ratatui::prelude::*;
 
 use color_eyre::eyre::Result;
+use utils::{initialize_logging, initialize_panic_handler, GIT_COMMIT_HASH};
 
 mod action;
 mod app;
 mod components;
+mod tui;
 mod utils;
 
-type DoggyTerminal = Terminal<CrosstermBackend<Stdout>>;
-
-fn setup_terminal() -> Result<DoggyTerminal> {
+fn setup_terminal() -> Result<ratatui::Terminal<CrosstermBackend<std::io::Stderr>>> {
     enable_raw_mode()?;
 
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
+    let mut stderr = io::stderr();
+    execute!(stderr, EnterAlternateScreen)?;
 
-    let backend = CrosstermBackend::new(stdout);
+    let backend = CrosstermBackend::new(stderr);
     let mut t = Terminal::new(backend)?;
 
     t.clear().expect("Unable to clear terminal");
@@ -40,7 +30,7 @@ fn setup_terminal() -> Result<DoggyTerminal> {
     Ok(t)
 }
 
-fn teardown(mut terminal: DoggyTerminal) -> Result<()> {
+fn teardown(mut terminal: ratatui::Terminal<CrosstermBackend<std::io::Stderr>>) -> Result<()> {
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;
@@ -48,13 +38,12 @@ fn teardown(mut terminal: DoggyTerminal) -> Result<()> {
     Ok(())
 }
 
-static GIT_HASH: &str = env!("GIT_HASH");
 static PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 async fn run() -> Result<()> {
     let mut terminal = setup_terminal()?;
 
-    let version: String = format!("{}@{}", PKG_VERSION, GIT_HASH);
+    let version: String = format!("{}@{}", PKG_VERSION, GIT_COMMIT_HASH);
     // create app and run it
     let mut app = App::new(&version);
     let res = app.run_app(&mut terminal);
@@ -70,29 +59,9 @@ async fn run() -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // env_logger::init();
-    let logfile = FileAppender::builder()
-        .encoder(Box::new(PatternEncoder::new("{l} - {m}\n")))
-        .build("log/output.log")?;
+    initialize_logging()?;
 
-    let config = Config::builder()
-        .appender(Appender::builder().build("logfile", Box::new(logfile)))
-        .build(
-            Root::builder()
-                .appender("logfile")
-                .build(LevelFilter::Debug),
-        )?;
-
-    log4rs::init_config(config)?;
-
-    set_hook(Box::new(|info| {
-        let _ = disable_raw_mode();
-        let _ = crossterm::execute!(io::stdout(), LeaveAlternateScreen);
-
-        if let Some(s) = info.payload().downcast_ref::<String>() {
-            log::error!("{}", s);
-        }
-    }));
+    initialize_panic_handler()?;
 
     if let Err(e) = run().await {
         eprintln!("{} error: Something went wrong", env!("CARGO_PKG_NAME"));
