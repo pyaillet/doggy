@@ -1,100 +1,26 @@
-use std::{
-    io::{self, Stdout},
-    panic::set_hook,
-};
-
 use app::App;
-use crossterm::{
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
-use log::LevelFilter;
-use log4rs::{
-    append::file::FileAppender,
-    config::{Appender, Root},
-    encode::pattern::PatternEncoder,
-    Config,
-};
-use ratatui::prelude::*;
 
 use color_eyre::eyre::Result;
+use utils::{initialize_logging, initialize_panic_handler, GIT_COMMIT_HASH};
 
 mod action;
 mod app;
 mod components;
+mod tui;
 mod utils;
 
-type DoggyTerminal = Terminal<CrosstermBackend<Stdout>>;
-
-fn setup_terminal() -> Result<DoggyTerminal> {
-    enable_raw_mode()?;
-
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
-
-    let backend = CrosstermBackend::new(stdout);
-    let mut t = Terminal::new(backend)?;
-
-    t.clear().expect("Unable to clear terminal");
-
-    Ok(t)
-}
-
-fn teardown(mut terminal: DoggyTerminal) -> Result<()> {
-    disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
-    terminal.show_cursor()?;
-
-    Ok(())
-}
-
-static GIT_HASH: &str = env!("GIT_HASH");
-static PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
-
-async fn run() -> Result<()> {
-    let mut terminal = setup_terminal()?;
-
-    let version: String = format!("{}@{}", PKG_VERSION, GIT_HASH);
-    // create app and run it
-    let mut app = App::new(&version);
-    let res = app.run_app(&mut terminal);
-
-    teardown(terminal)?;
-
-    if let Err(err) = res {
-        println!("{err:?}");
-    }
-
-    Ok(())
-}
+const DEFAULT_TICK_RATE: f64 = 1.0;
+const DEFAULT_FRAME_RATE: f64 = 10.0;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // env_logger::init();
-    let logfile = FileAppender::builder()
-        .encoder(Box::new(PatternEncoder::new("{l} - {m}\n")))
-        .build("log/output.log")?;
+    initialize_logging()?;
 
-    let config = Config::builder()
-        .appender(Appender::builder().build("logfile", Box::new(logfile)))
-        .build(
-            Root::builder()
-                .appender("logfile")
-                .build(LevelFilter::Debug),
-        )?;
+    initialize_panic_handler()?;
 
-    log4rs::init_config(config)?;
-
-    set_hook(Box::new(|info| {
-        let _ = disable_raw_mode();
-        let _ = crossterm::execute!(io::stdout(), LeaveAlternateScreen);
-
-        if let Some(s) = info.payload().downcast_ref::<String>() {
-            log::error!("{}", s);
-        }
-    }));
-
-    if let Err(e) = run().await {
+    // create app and run it
+    let mut app = App::new(GIT_COMMIT_HASH, DEFAULT_TICK_RATE, DEFAULT_FRAME_RATE);
+    if let Err(e) = app.run().await {
         eprintln!("{} error: Something went wrong", env!("CARGO_PKG_NAME"));
         Err(e)
     } else {

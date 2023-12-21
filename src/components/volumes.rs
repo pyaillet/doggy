@@ -13,6 +13,7 @@ use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph, TableState, Wrap};
 use ratatui::Frame;
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::action::Action;
 use crate::components::Component;
@@ -35,6 +36,7 @@ pub struct Volumes {
     state: TableState,
     volumes: Vec<[String; 4]>,
     show_popup: Popup,
+    action_tx: Option<UnboundedSender<Action>>,
 }
 
 impl Volumes {
@@ -44,6 +46,7 @@ impl Volumes {
             state: Default::default(),
             volumes: Vec::new(),
             show_popup: Popup::None,
+            action_tx: None,
         }
     }
 
@@ -121,9 +124,13 @@ impl Component for Volumes {
         "Volumes"
     }
 
-    fn update(&mut self, action: Option<Action>) -> Result<Option<Action>> {
+    fn register_action_handler(&mut self, action_tx: UnboundedSender<Action>) {
+        self.action_tx = Some(action_tx);
+    }
+
+    fn update(&mut self, action: Action) -> Result<()> {
         match action {
-            Some(Action::Refresh) => {
+            Action::Tick => {
                 let options = ListVolumesOptions {
                     filters: self.filters.clone(),
                 };
@@ -153,41 +160,33 @@ impl Component for Volumes {
                         })
                         .collect()
                 });
-                Ok(None)
             }
-            Some(Action::Down) => {
+            Action::Down => {
                 self.next();
-                Ok(None)
             }
-            Some(Action::Up) => {
+            Action::Up => {
                 self.previous();
-                Ok(None)
             }
-            Some(Action::Delete) => {
+            Action::Delete => {
                 if let Some(id) = self.get_selected_volume_info() {
                     self.show_popup = Popup::Delete(id);
-                    Ok(Some(Action::Refresh))
-                } else {
-                    Ok(None)
                 }
             }
-            Some(Action::Ok) => {
-                let show_popup = &self.show_popup;
-                match show_popup {
-                    Popup::Delete(id) => {
-                        delete_volume(id)?;
-                        self.show_popup = Popup::None;
-                        self.update(Some(Action::Refresh))
+            Action::Ok => {
+                if let Popup::Delete(id) = &self.show_popup {
+                    delete_volume(id)?;
+                    self.show_popup = Popup::None;
+                    if let Some(tx) = self.action_tx.clone() {
+                        tx.send(Action::Tick)?;
                     }
-                    _ => Ok(None),
                 }
             }
-            Some(Action::PreviousScreen) => {
+            Action::PreviousScreen => {
                 self.show_popup = Popup::None;
-                Ok(Some(Action::Refresh))
             }
-            _ => Ok(action),
-        }
+            _ => {}
+        };
+        Ok(())
     }
 
     fn draw(&mut self, f: &mut Frame<'_>, area: Rect) {
@@ -195,7 +194,7 @@ impl Component for Volumes {
             .constraints([Constraint::Percentage(100)])
             .split(area);
         let t = table(
-            self.get_name(),
+            self.get_name().to_string(),
             ["Name", "Driver", "Size", "Age"],
             self.volumes.clone(),
             &VOLUME_CONSTRAINTS,

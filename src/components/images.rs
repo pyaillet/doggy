@@ -14,6 +14,7 @@ use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph, TableState, Wrap};
 use ratatui::Frame;
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::action::Action;
 use crate::components::Component;
@@ -26,6 +27,7 @@ const IMAGE_CONSTRAINTS: [Constraint; 4] = [
     Constraint::Max(20),
 ];
 
+#[derive(Clone, Debug)]
 enum Popup {
     None,
     Delete(String, String),
@@ -36,6 +38,7 @@ pub struct Images {
     state: TableState,
     images: Vec<[String; 4]>,
     show_popup: Popup,
+    action_tx: Option<UnboundedSender<Action>>,
 }
 
 impl Images {
@@ -45,6 +48,7 @@ impl Images {
             state: Default::default(),
             images: Vec::new(),
             show_popup: Popup::None,
+            action_tx: None,
         }
     }
 
@@ -124,9 +128,13 @@ impl Component for Images {
         "Images"
     }
 
-    fn update(&mut self, action: Option<Action>) -> Result<Option<Action>> {
+    fn register_action_handler(&mut self, action_tx: UnboundedSender<Action>) {
+        self.action_tx = Some(action_tx);
+    }
+
+    fn update(&mut self, action: Action) -> Result<()> {
         match action {
-            Some(Action::Refresh) => {
+            Action::Tick => {
                 let options = ListImagesOptions {
                     filters: self.filters.clone(),
                     ..Default::default()
@@ -153,41 +161,42 @@ impl Component for Images {
                         })
                         .collect()
                 });
-                Ok(None)
             }
-            Some(Action::Down) => {
+            Action::Down => {
                 self.next();
-                Ok(None)
             }
-            Some(Action::Up) => {
+            Action::Up => {
                 self.previous();
-                Ok(None)
             }
-            Some(Action::Delete) => {
+            Action::Delete => {
                 if let Some((id, tag)) = self.get_selected_image_info() {
                     self.show_popup = Popup::Delete(id, tag);
-                    Ok(Some(Action::Refresh))
-                } else {
-                    Ok(None)
                 }
             }
-            Some(Action::Ok) => {
-                let show_popup = &self.show_popup;
-                match show_popup {
-                    Popup::Delete(id, _) => {
-                        delete_image(id)?;
-                        self.show_popup = Popup::None;
-                        self.update(Some(Action::Refresh))
-                    }
-                    _ => Ok(None),
-                }
+            Action::Ok => {
+                if let Popup::Delete(id, _) = &self.show_popup.clone() {
+                    block_on(async {
+                        if let Some(tx) = self.action_tx.clone() {
+                            if let Err(e) = delete_image(id).await {
+                                tx.send(Action::Error(format!(
+                                    "Unable to delete container \"{}\" {}",
+                                    id, e
+                                )))
+                                .expect("Unable to send error");
+                            } else {
+                                self.show_popup = Popup::None;
+                                tx.send(Action::Tick).expect("Unable to send tick");
+                            }
+                        }
+                    });
+                };
             }
-            Some(Action::PreviousScreen) => {
+            Action::PreviousScreen => {
                 self.show_popup = Popup::None;
-                Ok(Some(Action::Refresh))
             }
-            _ => Ok(action),
-        }
+            _ => {}
+        };
+        Ok(())
     }
 
     fn draw(&mut self, f: &mut Frame<'_>, area: Rect) {
@@ -195,7 +204,7 @@ impl Component for Images {
             .constraints([Constraint::Percentage(100)])
             .split(area);
         let t = table(
-            self.get_name(),
+            self.get_name().to_string(),
             ["Id", "Name", "Size", "Age"],
             self.images.clone(),
             &IMAGE_CONSTRAINTS,
@@ -206,16 +215,13 @@ impl Component for Images {
     }
 }
 
-fn delete_image(id: &str) -> Result<()> {
+async fn delete_image(id: &str) -> Result<()> {
     let options = RemoveImageOptions {
         force: true,
         ..Default::default()
     };
-    block_on(async {
-        let docker_cli =
-            Docker::connect_with_socket_defaults().expect("Unable to connect to docker");
-        // TODO: Handle error correctly
-        let _ = docker_cli.remove_image(id, Some(options), None).await;
-    });
+    let docker_cli = Docker::connect_with_socket_defaults()?;
+    // TODO: Handle error correctly
+    docker_cli.remove_image(id, Some(options), None).await?;
     Ok(())
 }

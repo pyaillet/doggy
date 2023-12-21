@@ -1,17 +1,15 @@
 use color_eyre::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
-use ratatui::layout::{Constraint, Direction, Layout};
+use crossterm::event::{self, KeyCode, KeyEventKind, KeyModifiers};
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
+use tokio::sync::mpsc::{self, UnboundedSender};
 
 use crate::action::Action;
 use crate::components::containers::Containers;
-use crate::components::images::Images;
-use crate::components::networks::Networks;
-use crate::components::volumes::Volumes;
-use crate::components::Component;
-use crate::DoggyTerminal;
+use crate::components::{Component, ComponentInit};
+use crate::tui;
 
 enum InputMode {
     None,
@@ -26,87 +24,142 @@ const VOLUMES: &str = "volumes";
 
 const SUGGESTIONS: [&str; 4] = [CONTAINERS, IMAGES, NETWORKS, VOLUMES];
 
-pub(crate) struct App<'a> {
+pub struct App {
     should_quit: bool,
-    main: Box<dyn Component>,
+    should_suspend: bool,
     input: String,
     input_mode: InputMode,
     cursor_position: usize,
     suggestion: Option<&'static str>,
-    version: &'a str,
+    version: &'static str,
+    frame_rate: f64,
+    tick_rate: f64,
 }
 
-impl<'a> App<'a> {
-    pub fn new(version: &'a str) -> Self {
+impl App {
+    pub fn new(version: &'static str, tick_rate: f64, frame_rate: f64) -> Self {
         App {
             should_quit: false,
-            main: Box::new(Containers::new()),
+            should_suspend: false,
             input: "".to_string(),
             input_mode: InputMode::None,
             suggestion: None,
             cursor_position: 0,
             version,
+            frame_rate,
+            tick_rate,
         }
     }
 
-    pub fn update(
-        &mut self,
-        action: Option<Action>,
-        terminal: &mut DoggyTerminal,
-    ) -> Result<Option<Action>> {
-        match action {
-            Some(Action::Quit) => {
-                self.should_quit = true;
-                Ok(None)
-            }
-            Some(Action::Screen(screen, refresh)) => {
-                self.main = screen;
-                let action = self.main.update(Some(Action::Refresh));
-                if refresh {
-                    terminal.clear()?;
+    pub async fn run(&mut self) -> Result<()> {
+        let (action_tx, mut action_rx) = mpsc::unbounded_channel::<Action>();
+
+        let mut tui = tui::Tui::new()?;
+        tui.tick_rate(self.tick_rate);
+        tui.frame_rate(self.frame_rate);
+        tui.enter()?;
+
+        let mut main: Box<dyn Component> = Box::new(Containers::new());
+        main.register_action_handler(action_tx.clone());
+
+        loop {
+            if let Some(event) = tui.next().await {
+                match event {
+                    tui::Event::Tick => action_tx.send(Action::Tick)?,
+                    tui::Event::Render => action_tx.send(Action::Render)?,
+                    tui::Event::Resize(x, y) => action_tx.send(Action::Resize(x, y))?,
+                    tui::Event::Key(kevent) => match self.input_mode {
+                        InputMode::Change => {
+                            self.handle_input(kevent, action_tx.clone())?;
+                        }
+                        InputMode::None => {
+                            self.handle_key(kevent, action_tx.clone())?;
+                        }
+                    },
+                    _ => action_tx.send(Action::Error("Unhandled event".to_string()))?,
                 }
-                action
             }
-            Some(Action::Change) => {
-                self.input_mode = InputMode::Change;
-                Ok(None)
+
+            while let Ok(action) = action_rx.try_recv() {
+                match action {
+                    Action::Quit => self.should_quit = true,
+                    Action::Suspend => self.should_suspend = true,
+                    Action::Resume => {
+                        self.should_suspend = false;
+                        tui.resume()?;
+                    }
+                    Action::Resize(w, h) => {
+                        tui.resize(Rect::new(0, 0, w, h))?;
+
+                        let main_layout = Layout::default()
+                            .direction(Direction::Vertical)
+                            .constraints([
+                                Constraint::Max(3),
+                                Constraint::Min(5),
+                                Constraint::Max(1),
+                            ])
+                            .split(tui.get_frame().size());
+                        tui.draw(|f| {
+                            self.draw_header(f, main_layout[0]);
+                            main.draw(f, main_layout[1]);
+                            self.draw_status(f, main_layout[2]);
+                        })?;
+                    }
+                    Action::Render => {
+                        let main_layout = Layout::default()
+                            .direction(Direction::Vertical)
+                            .constraints([
+                                Constraint::Max(3),
+                                Constraint::Min(5),
+                                Constraint::Max(1),
+                            ])
+                            .split(tui.get_frame().size());
+                        log::debug!("{:?}", main_layout);
+
+                        log::debug!("Drawing component: {}", main.get_name());
+                        tui.draw(|f| {
+                            self.draw_header(f, main_layout[0]);
+                            main.draw(f, main_layout[1]);
+                            self.draw_status(f, main_layout[2]);
+                        })?;
+                    }
+                    Action::Screen(ref screen) => {
+                        let mut new_main = screen.clone().get_component();
+                        new_main.register_action_handler(action_tx.clone());
+                        main.teardown(&mut tui)?;
+                        new_main.setup(&mut tui)?;
+                        main = new_main;
+                    }
+                    Action::Change => {
+                        self.input_mode = InputMode::Change;
+                    }
+                    Action::PreviousScreen => {
+                        if let InputMode::Change = self.input_mode {
+                            self.reset_input();
+                        }
+                    }
+                    _ => {}
+                };
+                match self.input_mode {
+                    InputMode::None => {
+                        main.update(action.clone())?;
+                    }
+                    InputMode::Change => {}
+                }
             }
-            _ => Ok(None),
+            if self.should_suspend {
+                tui.suspend()?;
+                action_tx.send(Action::Resume)?;
+                tui = tui::Tui::new()?;
+                tui.tick_rate(self.tick_rate);
+                tui.frame_rate(self.frame_rate);
+                tui.enter()?;
+            } else if self.should_quit {
+                tui.stop()?;
+                break;
+            }
         }
-    }
-
-    pub fn run_app(&mut self, terminal: &mut DoggyTerminal) -> Result<()> {
-        log::debug!("Updating component: {}", self.main.get_name());
-        self.main.update(Some(Action::Refresh))?;
-        while !self.should_quit {
-            let main_layout = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Max(3), Constraint::Min(5), Constraint::Max(1)])
-                .split(terminal.get_frame().size());
-
-            log::debug!("{:?}", main_layout);
-
-            log::debug!("Drawing component: {}", self.main.get_name());
-            terminal.draw(|f| {
-                self.draw_header(f, main_layout[0]);
-                self.main.draw(f, main_layout[1]);
-                self.draw_status(f, main_layout[2]);
-            })?;
-
-            let mut action = match self.input_mode {
-                InputMode::None => handle_event()?,
-                InputMode::Change => self.handle_input()?,
-                // InputMode::Filter => self.handle_input()?,
-            };
-
-            log::debug!("Received action: {:?}", action);
-            action = self.main.update(action)?;
-
-            log::debug!("Action after component processing: {:?}", action);
-            while action.is_some() {
-                action = self.update(action, terminal)?;
-            }
-        }
+        tui.exit()?;
         Ok(())
     }
 
@@ -188,62 +241,62 @@ impl<'a> App<'a> {
         self.cursor_position = 0;
     }
 
-    fn handle_input(&mut self) -> Result<Option<Action>> {
-        let action = if let Event::Key(key) = event::read()? {
-            if key.kind == KeyEventKind::Press {
-                match key.code {
-                    KeyCode::Enter => self.submit_input(),
-                    KeyCode::Char(to_insert) => {
-                        self.enter_char(to_insert);
-                        self.suggestion = self.update_suggestion();
-                        None
+    fn handle_input(
+        &mut self,
+        kevent: event::KeyEvent,
+        action_tx: UnboundedSender<Action>,
+    ) -> Result<()> {
+        if kevent.kind == KeyEventKind::Press {
+            match kevent.code {
+                KeyCode::Enter => match self.submit_input() {
+                    Some(action) => {
+                        action_tx.send(action)?;
                     }
-                    KeyCode::Backspace => {
-                        self.delete_char();
-                        None
+                    None => {
+                        action_tx.send(Action::Error("No resource found".to_string()))?;
                     }
-                    KeyCode::Left => {
-                        self.move_cursor_left();
-                        None
-                    }
-                    KeyCode::Right => {
-                        self.move_cursor_right();
-                        None
-                    }
-                    KeyCode::Esc => {
-                        self.input = "".to_string();
-                        self.input_mode = InputMode::None;
-                        self.reset_cursor();
-                        None
-                    }
-                    _ => None,
+                },
+                KeyCode::Char(to_insert) => {
+                    self.enter_char(to_insert);
+                    self.suggestion = self.update_suggestion();
                 }
-            } else {
-                None
+                KeyCode::Backspace => {
+                    self.delete_char();
+                }
+                KeyCode::Left => {
+                    self.move_cursor_left();
+                }
+                KeyCode::Right => {
+                    self.move_cursor_right();
+                }
+                KeyCode::Esc => {
+                    self.input = "".to_string();
+                    self.input_mode = InputMode::None;
+                    self.reset_cursor();
+                }
+                _ => {}
             }
-        } else {
-            None
         };
-        Ok(action)
+        Ok(())
     }
 
     fn submit_input(&mut self) -> Option<Action> {
         match self.suggestion {
             Some(CONTAINERS) => {
                 self.reset_input();
-                Some(Action::Screen(Box::new(Containers::new()), false))
+                Some(Action::Screen(ComponentInit::Containers))
             }
             Some(IMAGES) => {
                 self.reset_input();
-                Some(Action::Screen(Box::new(Images::new()), false))
+                Some(Action::Screen(ComponentInit::Images))
             }
             Some(VOLUMES) => {
                 self.reset_input();
-                Some(Action::Screen(Box::new(Volumes::new()), false))
+                Some(Action::Screen(ComponentInit::Volumes))
             }
             Some(NETWORKS) => {
                 self.reset_input();
-                Some(Action::Screen(Box::new(Networks::new()), false))
+                Some(Action::Screen(ComponentInit::Networks))
             }
             _ => None,
         }
@@ -260,41 +313,36 @@ impl<'a> App<'a> {
             .into_iter()
             .find(|searched| searched.starts_with(&self.input))
     }
-}
 
-fn handle_event() -> Result<Option<Action>, color_eyre::eyre::Error> {
-    let action =
-        if let Event::Key(key) = event::read()? {
-            if key.kind == KeyEventKind::Press {
-                match (key.code, key.modifiers) {
-                    (KeyCode::Char('q'), KeyModifiers::NONE) => Some(Action::Quit),
-                    (KeyCode::Char('j'), KeyModifiers::NONE)
-                    | (KeyCode::Down, KeyModifiers::NONE) => Some(Action::Down),
-                    (KeyCode::Char('k'), KeyModifiers::NONE)
-                    | (KeyCode::Up, KeyModifiers::NONE) => Some(Action::Up),
-                    (KeyCode::Char('h'), KeyModifiers::NONE)
-                    | (KeyCode::Left, KeyModifiers::NONE) => Some(Action::Left),
-                    (KeyCode::Char('l'), KeyModifiers::NONE)
-                    | (KeyCode::Right, KeyModifiers::NONE) => Some(Action::Right),
-                    (KeyCode::Char('J'), KeyModifiers::NONE)
-                    | (KeyCode::PageUp, KeyModifiers::NONE) => Some(Action::PageUp),
-                    (KeyCode::Char('K'), KeyModifiers::NONE)
-                    | (KeyCode::PageDown, KeyModifiers::NONE) => Some(Action::PageDown),
-                    (KeyCode::Char('a'), KeyModifiers::NONE) => Some(Action::All),
-                    (KeyCode::Char('i'), KeyModifiers::NONE) => Some(Action::Inspect),
-                    (KeyCode::Char('s'), KeyModifiers::NONE) => Some(Action::Shell),
-                    (KeyCode::Esc, KeyModifiers::NONE) => Some(Action::PreviousScreen),
-                    (KeyCode::Enter, KeyModifiers::NONE) => Some(Action::Ok),
-                    (KeyCode::Char('d'), KeyModifiers::CONTROL) => Some(Action::Delete),
-                    (KeyCode::Char(':'), KeyModifiers::NONE) => Some(Action::Change),
-                    (KeyCode::Char('/'), KeyModifiers::NONE) => Some(Action::Filter),
-                    _ => None,
-                }
-            } else {
-                None
+    fn handle_key(
+        &self,
+        kevent: event::KeyEvent,
+        action_tx: UnboundedSender<Action>,
+    ) -> Result<()> {
+        match kevent.code {
+            KeyCode::Char('a') => {
+                action_tx.send(Action::All)?;
+                action_tx.send(Action::Tick)?;
             }
-        } else {
-            None
-        };
-    Ok(action)
+            KeyCode::Char('q') => action_tx.send(Action::Quit)?,
+            KeyCode::Char(':') => action_tx.send(Action::Change)?,
+            KeyCode::Char('i') => action_tx.send(Action::Inspect)?,
+            KeyCode::Char('s') => action_tx.send(Action::Shell)?,
+            KeyCode::Char('j') | KeyCode::Down => action_tx.send(Action::Down)?,
+            KeyCode::Char('k') | KeyCode::Up => action_tx.send(Action::Up)?,
+            KeyCode::Char('h') | KeyCode::Left => action_tx.send(Action::Left)?,
+            KeyCode::Char('l') | KeyCode::Right => action_tx.send(Action::Right)?,
+            KeyCode::PageUp => action_tx.send(Action::PageUp)?,
+            KeyCode::PageDown => action_tx.send(Action::PageDown)?,
+            KeyCode::Esc => action_tx.send(Action::PreviousScreen)?,
+            KeyCode::Enter => action_tx.send(Action::Ok)?,
+            KeyCode::Char('d') => {
+                if let KeyModifiers::CONTROL = kevent.modifiers {
+                    action_tx.send(Action::Delete)?;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
 }
