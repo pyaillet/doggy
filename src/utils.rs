@@ -5,6 +5,9 @@ use color_eyre::Result;
 use directories::ProjectDirs;
 use lazy_static::lazy_static;
 
+#[cfg(feature = "otel")]
+use opentelemetry::global;
+
 use ratatui::{
     prelude::*,
     widgets::{Block, Borders, Cell, Row, Table},
@@ -166,14 +169,19 @@ pub fn get_data_dir() -> PathBuf {
 pub fn initialize_logging() -> Result<()> {
     let directory = get_data_dir();
     std::fs::create_dir_all(directory.clone())?;
+
     let log_path = directory.join(LOG_FILE.clone());
     let log_file = std::fs::File::create(log_path)?;
+
     std::env::set_var(
         "RUST_LOG",
         std::env::var("RUST_LOG")
             .or_else(|_| std::env::var(LOG_ENV.clone()))
-            .unwrap_or_else(|_| format!("{}=debug", env!("CARGO_CRATE_NAME"))),
+            .unwrap_or_else(|_| format!("{}=trace", env!("CARGO_CRATE_NAME"))),
     );
+
+    // The SubscriberExt and SubscriberInitExt traits are needed to extend the
+    // Registry to accept `opentelemetry (the OpenTelemetryLayer type).
     let file_subscriber = tracing_subscriber::fmt::layer()
         .with_file(true)
         .with_line_number(true)
@@ -181,9 +189,26 @@ pub fn initialize_logging() -> Result<()> {
         .with_target(false)
         .with_ansi(false)
         .with_filter(tracing_subscriber::filter::EnvFilter::from_default_env());
-    tracing_subscriber::registry()
+    let tracing_registry = tracing_subscriber::registry()
         .with(file_subscriber)
-        .with(ErrorLayer::default())
-        .init();
+        .with(ErrorLayer::default());
+
+    #[cfg(feature = "otel")]
+    let tracing_registry = {
+        // Allows you to pass along context (i.e., trace IDs) across services
+        global::set_text_map_propagator(opentelemetry_jaeger::Propagator::new());
+        // Sets up the machinery needed to export data to Jaeger
+        // There are other OTel crates that provide pipelines for the vendors
+        // mentioned earlier.
+        let tracer = opentelemetry_jaeger::new_pipeline()
+            .with_service_name("doggy")
+            .install_simple()?;
+
+        // Create a tracing layer with the configured tracer
+        let opentelemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+        tracing_registry.with(opentelemetry)
+    };
+
+    tracing_registry.init();
     Ok(())
 }

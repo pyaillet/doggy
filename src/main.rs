@@ -10,7 +10,7 @@ mod tui;
 mod utils;
 
 const DEFAULT_TICK_RATE: f64 = 1.0;
-const DEFAULT_FRAME_RATE: f64 = 10.0;
+const DEFAULT_FRAME_RATE: f64 = 30.0;
 
 #[tokio::main]
 async fn main() -> Result<()> {
