@@ -28,7 +28,7 @@ You can download one of the binary from the release page
 - Change view: `:` and resource name (`containers`, `images`, `networks`, `volumes`)
 - Show/hide stopped containers: `a`
 - Inspect container: `i` 
-- Launch `/bin/bash` in the container: `s` (Error handling should be improved #22)
+- Launch `/bin/bash` in the container: `s`
 - Launch a custom command in the container: `S`
 - Delete a resource: `Ctrl+d`
 - Browse lists:
