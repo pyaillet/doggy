@@ -29,6 +29,7 @@ You can download one of the binary from the release page
 - Show/hide stopped containers: `a`
 - Inspect container: `i` 
 - Launch `/bin/bash` in the container: `s` (Error handling should be improved #22)
+- Launch a custom command in the container: `S`
 - Delete a resource: `Ctrl+d`
 - Browse lists:
   - Up: `↑` or `j`

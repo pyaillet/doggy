@@ -1,3 +1,4 @@
+use crossterm::event;
 use ratatui::{layout::Rect, Frame};
 
 use color_eyre::Result;
@@ -66,6 +67,10 @@ pub(crate) trait Component {
         Ok(())
     }
     fn teardown(&mut self, _t: &mut tui::Tui) -> Result<()> {
+        Ok(())
+    }
+
+    fn handle_input(&mut self, _kevent: event::KeyEvent) -> Result<()> {
         Ok(())
     }
 }
