@@ -3,13 +3,14 @@ use crossterm::event::{self, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph, Wrap};
 use tokio::sync::mpsc::{self, UnboundedSender};
 
 use crate::action::Action;
 use crate::components::containers::Containers;
 use crate::components::{Component, ComponentInit};
 use crate::tui;
+use crate::utils::centered_rect;
 
 enum InputMode {
     None,
@@ -17,12 +18,19 @@ enum InputMode {
     //TODO Filter
 }
 
+const DEFAULT_TOAST_DELAY: usize = 5;
+
 const CONTAINERS: &str = "containers";
 const IMAGES: &str = "images";
 const NETWORKS: &str = "networks";
 const VOLUMES: &str = "volumes";
 
 const SUGGESTIONS: [&str; 4] = [CONTAINERS, IMAGES, NETWORKS, VOLUMES];
+
+pub enum Popup {
+    None,
+    Error(String, usize),
+}
 
 pub struct App {
     should_quit: bool,
@@ -34,6 +42,7 @@ pub struct App {
     version: &'static str,
     frame_rate: f64,
     tick_rate: f64,
+    show_popup: Popup,
 }
 
 impl App {
@@ -48,6 +57,7 @@ impl App {
             version,
             frame_rate,
             tick_rate,
+            show_popup: Popup::None,
         }
     }
 
@@ -77,7 +87,7 @@ impl App {
                             self.handle_key(kevent, action_tx.clone())?;
                         }
                     },
-                    _ => action_tx.send(Action::Error("Unhandled event".to_string()))?,
+                    _ => {}
                 }
             }
 
@@ -103,6 +113,7 @@ impl App {
                         tui.draw(|f| {
                             self.draw_header(f, main_layout[0]);
                             main.draw(f, main_layout[1]);
+                            self.draw_popup(f);
                             self.draw_status(f, main_layout[2]);
                         })?;
                     }
@@ -121,8 +132,18 @@ impl App {
                         tui.draw(|f| {
                             self.draw_header(f, main_layout[0]);
                             main.draw(f, main_layout[1]);
+                            self.draw_popup(f);
                             self.draw_status(f, main_layout[2]);
                         })?;
+                    }
+                    Action::Tick => {
+                        if let Popup::Error(_msg, timeout) = &mut self.show_popup {
+                            if *timeout > 0 {
+                                *timeout = timeout.saturating_sub(1);
+                            } else {
+                                self.show_popup = Popup::None;
+                            }
+                        }
                     }
                     Action::Screen(ref screen) => {
                         let mut new_main = screen.clone().get_component();
@@ -138,6 +159,12 @@ impl App {
                         if let InputMode::Change = self.input_mode {
                             self.reset_input();
                         }
+                        if let Popup::Error(_, _) = self.show_popup {
+                            self.show_popup = Popup::None;
+                        }
+                    }
+                    Action::Error(ref msg) => {
+                        self.show_popup = Popup::Error(msg.to_string(), DEFAULT_TOAST_DELAY);
                     }
                     _ => {}
                 };
@@ -346,5 +373,29 @@ impl App {
             _ => {}
         }
         Ok(())
+    }
+
+    fn draw_popup(&mut self, f: &mut ratatui::prelude::Frame<'_>) {
+        if let Popup::Error(msg, timeout) = &mut self.show_popup {
+            let text = vec![
+                Line::from(vec![Span::styled(msg.to_string(), Style::new().gray())]),
+                Line::from(""),
+                Line::from(format!("This popup will disappear in {}s", timeout)),
+                Line::from(vec![
+                    Span::from("Press "),
+                    Span::styled("ESC", Style::new().bold()),
+                    Span::from(" to cancel"),
+                ]),
+            ];
+            let paragraph = Paragraph::new(text).wrap(Wrap { trim: false });
+
+            let block = Block::default()
+                .title("Error".bold().red())
+                .padding(Padding::new(1, 1, 1, 1))
+                .borders(Borders::ALL);
+            let area = centered_rect(60, 15, f.size());
+            f.render_widget(Clear, area); //this clears out the background
+            f.render_widget(paragraph.block(block), area);
+        }
     }
 }
