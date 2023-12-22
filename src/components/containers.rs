@@ -39,14 +39,16 @@ enum Popup {
 #[derive(Clone, Debug, Default)]
 struct ShellPopup {
     cid: String,
+    cname: String,
     input: String,
     cursor_position: usize,
 }
 
 impl ShellPopup {
-    fn new(cid: String) -> Self {
+    fn new(cid: String, cname: String) -> Self {
         ShellPopup {
             cid,
+            cname,
             ..Default::default()
         }
     }
@@ -279,17 +281,16 @@ impl Component for Containers {
                 }
             }
             (Action::Shell, Popup::None) => {
-                if let Some(action) = self
-                    .get_selected_container_info()
-                    .map(|cinfo| Action::Screen(super::ComponentInit::ContainerExec(cinfo.0, None)))
-                {
+                if let Some(action) = self.get_selected_container_info().map(|cinfo| {
+                    Action::Screen(super::ComponentInit::ContainerExec(cinfo.0, cinfo.1, None))
+                }) {
                     tx.send(Action::Suspend)?;
                     tx.send(action)?;
                 }
             }
             (Action::CustomShell, Popup::None) => {
-                if let Some((cid, _cname)) = self.get_selected_container_info() {
-                    self.show_popup = Popup::Shell(ShellPopup::new(cid));
+                if let Some((cid, cname)) = self.get_selected_container_info() {
+                    self.show_popup = Popup::Shell(ShellPopup::new(cid, cname));
                 }
             }
             (Action::Delete, Popup::None) => {
@@ -313,6 +314,7 @@ impl Component for Containers {
             (Action::Ok, Popup::Shell(shell)) => {
                 let action = Action::Screen(super::ComponentInit::ContainerExec(
                     shell.cid,
+                    shell.cname,
                     Some(shell.input),
                 ));
                 tx.send(Action::Suspend)?;

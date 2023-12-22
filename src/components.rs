@@ -24,7 +24,7 @@ pub mod volumes;
 #[derive(Clone, Debug)]
 pub(crate) enum ComponentInit {
     Containers,
-    ContainerExec(String, Option<String>),
+    ContainerExec(String, String, Option<String>),
     ContainerInspect(String, String),
     Images,
     Networks,
@@ -36,7 +36,9 @@ impl ComponentInit {
         match self {
             ComponentInit::Containers => Box::new(Containers::new()),
             ComponentInit::ContainerInspect(id, name) => Box::new(ContainerDetails::new(id, name)),
-            ComponentInit::ContainerExec(id, cmd) => Box::new(ContainerExec::new(id, cmd)),
+            ComponentInit::ContainerExec(id, cname, cmd) => {
+                Box::new(ContainerExec::new(id, cname, cmd))
+            }
             ComponentInit::Images => Box::new(Images::new()),
             ComponentInit::Networks => Box::new(Networks::new()),
             ComponentInit::Volumes => Box::new(Volumes::new()),
