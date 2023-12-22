@@ -16,6 +16,7 @@ use ratatui::{
     Frame,
 };
 use tokio::sync::mpsc::UnboundedSender;
+use tracing::instrument;
 
 use crate::components::Component;
 use crate::utils::get_or_not_found;
@@ -234,6 +235,13 @@ impl Component for Containers {
         self.action_tx = Some(tx);
     }
 
+    #[instrument(
+        name = "Containers::update",
+        skip(self),
+        fields(
+            action = %action
+        ),
+    )]
     fn update(&mut self, action: Action) -> Result<()> {
         let tx = self
             .action_tx
@@ -329,6 +337,7 @@ impl Component for Containers {
         Ok(())
     }
 
+    #[instrument(name = "Containers::draw", skip(self))]
     fn draw(&mut self, f: &mut Frame<'_>, area: Rect) {
         let rects = Layout::default()
             .constraints([Constraint::Percentage(100)])
@@ -375,6 +384,7 @@ impl Component for Containers {
     }
 }
 
+#[instrument(name = "containers::delete_container")]
 async fn delete_container(cid: &str) -> Result<()> {
     let options = RemoveContainerOptions {
         force: true,
@@ -385,6 +395,7 @@ async fn delete_container(cid: &str) -> Result<()> {
     Ok(())
 }
 
+#[instrument(name = "containers::list_containers", skip(options))]
 async fn list_containers(
     options: Option<ListContainersOptions<String>>,
 ) -> Result<Vec<[String; 4]>> {

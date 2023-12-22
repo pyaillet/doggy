@@ -14,7 +14,7 @@ use futures::StreamExt;
 use tokio::io::{stdin, AsyncReadExt, AsyncWriteExt};
 use tokio::select;
 use tokio::sync::mpsc::UnboundedSender;
-use tokio::sync::oneshot::channel;
+use tokio::sync::oneshot::{channel, Receiver};
 use tokio::task::spawn;
 
 use crate::action::Action;
@@ -28,7 +28,6 @@ pub struct ContainerExec {
     cname: String,
     command: String,
     action_tx: Option<UnboundedSender<Action>>,
-    should_stop: bool,
 }
 
 impl ContainerExec {
@@ -39,11 +38,10 @@ impl ContainerExec {
             cname,
             command: command.unwrap_or(DEFAULT_CMD.to_string()),
             action_tx: None,
-            should_stop: false,
         }
     }
 
-    async fn exec(&mut self) -> Result<()> {
+    async fn exec(&mut self, mut rx: Receiver<usize>) -> Result<()> {
         let docker = Docker::connect_with_socket_defaults()?;
 
         let tty_size = crossterm::terminal::size()?;
@@ -69,8 +67,6 @@ impl ContainerExec {
             mut input,
         } = docker.start_exec(&exec, None).await?
         {
-            let (tx, mut rx) = channel();
-
             // pipe stdin into the docker exec stream input
             let handle = spawn(async move {
                 let mut buf: [u8; 1] = [0];
@@ -105,7 +101,6 @@ impl ContainerExec {
             }
 
             log::debug!("Closing terminal");
-            tx.send(0).expect("Unable to cancel stdin task");
             handle.await?;
         }
         Ok(())
@@ -134,17 +129,17 @@ impl Component for ContainerExec {
     fn update(&mut self, _action: Action) -> Result<()> {
         let tx = self.action_tx.clone().expect("Unable to get event sender");
 
-        if !self.should_stop {
-            if let Err(e) = block_on(self.exec()) {
-                tx.send(Action::Error(format!(
-                    "Unable to execute command \"{}\" in container \"{}\"\n{}",
-                    self.command, self.cname, e
-                )))?;
-            }
+        let (tx_stdin_loop, rx) = channel();
+        let res = block_on(self.exec(rx));
 
-            self.should_stop = true;
-            tx.send(Action::Resume)?;
-            tx.send(Action::Screen(super::ComponentInit::Containers))?;
+        tx_stdin_loop.send(0).expect("Unable to cancel stdin task");
+        tx.send(Action::Resume)?;
+        tx.send(Action::Screen(super::ComponentInit::Containers))?;
+        if let Err(e) = res {
+            tx.send(Action::Error(format!(
+                "Unable to execute command \"{}\" in container \"{}\"\n{}",
+                self.command, self.cname, e
+            )))?;
         }
         Ok(())
     }

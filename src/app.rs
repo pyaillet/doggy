@@ -5,6 +5,7 @@ use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph, Wrap};
 use tokio::sync::mpsc::{self, UnboundedSender};
+use tracing::{span, Level};
 
 use crate::action::Action;
 use crate::components::containers::Containers;
@@ -73,7 +74,10 @@ impl App {
         main.register_action_handler(action_tx.clone());
 
         loop {
+            let loop_span = span!(Level::TRACE, "loop").entered();
+            let event_span = span!(Level::TRACE, "tui event").entered();
             if let Some(event) = tui.next().await {
+                event_span.record("event", format!("{:?}", event));
                 match event {
                     tui::Event::Tick => action_tx.send(Action::Tick)?,
                     tui::Event::Render => action_tx.send(Action::Render)?,
@@ -90,8 +94,11 @@ impl App {
                     _ => {}
                 }
             }
+            event_span.exit();
 
             while let Ok(action) = action_rx.try_recv() {
+                let action_span = span!(Level::TRACE, "action").entered();
+                action_span.record("action", format!("{:?}", &action));
                 match action {
                     Action::Quit => self.should_quit = true,
                     Action::Suspend => self.should_suspend = true,
@@ -100,6 +107,7 @@ impl App {
                         tui.resume()?;
                     }
                     Action::Resize(w, h) => {
+                        let resize_span = span!(Level::TRACE, "resize").entered();
                         tui.resize(Rect::new(0, 0, w, h))?;
 
                         let main_layout = Layout::default()
@@ -116,8 +124,10 @@ impl App {
                             self.draw_popup(f);
                             self.draw_status(f, main_layout[2]);
                         })?;
+                        resize_span.exit();
                     }
                     Action::Render => {
+                        let render_span = span!(Level::TRACE, "render").entered();
                         let main_layout = Layout::default()
                             .direction(Direction::Vertical)
                             .constraints([
@@ -135,6 +145,7 @@ impl App {
                             self.draw_popup(f);
                             self.draw_status(f, main_layout[2]);
                         })?;
+                        render_span.exit();
                     }
                     Action::Tick => {
                         if let Popup::Error(_msg, timeout) = &mut self.show_popup {
@@ -174,6 +185,7 @@ impl App {
                     }
                     InputMode::Change => {}
                 }
+                action_span.exit();
             }
             if self.should_suspend {
                 tui.suspend()?;
@@ -186,6 +198,7 @@ impl App {
                 tui.stop()?;
                 break;
             }
+            loop_span.exit();
         }
         tui.exit()?;
         Ok(())
