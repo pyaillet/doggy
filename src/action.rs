@@ -26,6 +26,7 @@ pub(crate) enum Action {
     Resize(u16, u16),
     Resume,
     Suspend,
+    CustomShell,
 }
 
 /*

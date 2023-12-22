@@ -73,6 +73,7 @@ impl App {
                             self.handle_input(kevent, action_tx.clone())?;
                         }
                         InputMode::None => {
+                            main.handle_input(kevent)?;
                             self.handle_key(kevent, action_tx.clone())?;
                         }
                     },
@@ -328,6 +329,7 @@ impl App {
             KeyCode::Char(':') => action_tx.send(Action::Change)?,
             KeyCode::Char('i') => action_tx.send(Action::Inspect)?,
             KeyCode::Char('s') => action_tx.send(Action::Shell)?,
+            KeyCode::Char('S') => action_tx.send(Action::CustomShell)?,
             KeyCode::Char('j') | KeyCode::Down => action_tx.send(Action::Down)?,
             KeyCode::Char('k') | KeyCode::Up => action_tx.send(Action::Up)?,
             KeyCode::Char('h') | KeyCode::Left => action_tx.send(Action::Left)?,

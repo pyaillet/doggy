@@ -6,6 +6,7 @@ use bollard::{
 };
 use color_eyre::Result;
 
+use crossterm::event::{self, KeyCode, KeyEventKind};
 use futures::executor::block_on;
 use ratatui::{
     layout::{Constraint, Layout, Rect},
@@ -32,6 +33,23 @@ const CONTAINER_CONSTRAINTS: [Constraint; 4] = [
 enum Popup {
     None,
     Delete(String, String),
+    Shell(ShellPopup),
+}
+
+#[derive(Clone, Debug, Default)]
+struct ShellPopup {
+    cid: String,
+    input: String,
+    cursor_position: usize,
+}
+
+impl ShellPopup {
+    fn new(cid: String) -> Self {
+        ShellPopup {
+            cid,
+            ..Default::default()
+        }
+    }
 }
 
 pub struct Containers {
@@ -98,30 +116,109 @@ impl Containers {
     }
 
     fn draw_popup(&self, f: &mut Frame<'_>) {
-        if let Popup::Delete(_cid, cname) = &self.show_popup {
-            let text = vec![
-                Line::from(vec![
-                    Span::raw("Are you sure you want to delete container: \""),
-                    Span::styled(cname, Style::new().gray()),
-                    Span::raw("\"?"),
-                ]),
-                Line::from(""),
-                Line::from(vec![
-                    "ESC".bold(),
-                    " to Cancel, ".into(),
-                    "Enter".bold(),
-                    " to Confirm".into(),
-                ]),
-            ];
-            let paragraph = Paragraph::new(text).wrap(Wrap { trim: false });
+        match &self.show_popup {
+            Popup::Delete(_cid, cname) => {
+                let text = vec![
+                    Line::from(vec![
+                        Span::raw("Are you sure you want to delete container: \""),
+                        Span::styled(cname, Style::new().gray()),
+                        Span::raw("\"?"),
+                    ]),
+                    Line::from(""),
+                    Line::from(vec![
+                        "ESC".bold(),
+                        " to Cancel, ".into(),
+                        "Enter".bold(),
+                        " to Confirm".into(),
+                    ]),
+                ];
+                let paragraph = Paragraph::new(text).wrap(Wrap { trim: false });
 
-            let block = Block::default()
-                .title("Confirmation".bold())
-                .padding(Padding::new(1, 1, 1, 1))
-                .borders(Borders::ALL);
-            let area = centered_rect(50, 8, f.size());
-            f.render_widget(Clear, area); //this clears out the background
-            f.render_widget(paragraph.block(block), area);
+                let block = Block::default()
+                    .title("Confirmation".bold())
+                    .padding(Padding::new(1, 1, 1, 1))
+                    .borders(Borders::ALL);
+                let area = centered_rect(50, 8, f.size());
+                f.render_widget(Clear, area); //this clears out the background
+                f.render_widget(paragraph.block(block), area);
+            }
+            Popup::Shell(shell_popup) => {
+                let text = vec![
+                    Line::from(vec![Span::raw(
+                        "You will launch the following command in the container:",
+                    )]),
+                    Line::from(""),
+                    Line::from(format!("> {}", shell_popup.input.clone())),
+                    Line::from(""),
+                    Line::from(vec![
+                        "ESC".bold(),
+                        " to Cancel, ".into(),
+                        "Enter".bold(),
+                        " to Confirm".into(),
+                    ]),
+                ];
+                let paragraph = Paragraph::new(text).wrap(Wrap { trim: false });
+
+                let block = Block::default()
+                    .title("Launch command".bold())
+                    .padding(Padding::new(1, 1, 1, 1))
+                    .borders(Borders::ALL);
+                let area = centered_rect(50, 10, f.size());
+                f.render_widget(Clear, area); //this clears out the background
+                f.render_widget(paragraph.block(block), area);
+            }
+            _ => {}
+        }
+    }
+
+    fn delete_char(&mut self) {
+        if let Popup::Shell(ref mut shell_popup) = self.show_popup {
+            let is_not_cursor_leftmost = shell_popup.cursor_position != 0;
+            if is_not_cursor_leftmost {
+                // Method "remove" is not used on the saved text for deleting the selected char.
+                // Reason: Using remove on String works on bytes instead of the chars.
+                // Using remove would require special care because of char boundaries.
+
+                let current_index = shell_popup.cursor_position;
+                let from_left_to_current_index = current_index - 1;
+
+                // Getting all characters before the selected character.
+                let before_char_to_delete =
+                    shell_popup.input.chars().take(from_left_to_current_index);
+                // Getting all characters after selected character.
+                let after_char_to_delete = shell_popup.input.chars().skip(current_index);
+
+                // Put all characters together except the selected one.
+                // By leaving the selected one out, it is forgotten and therefore deleted.
+                shell_popup.input = before_char_to_delete.chain(after_char_to_delete).collect();
+                self.move_cursor_left();
+            }
+        }
+    }
+
+    fn enter_char(&mut self, new_char: char) {
+        if let Popup::Shell(ref mut shell_popup) = self.show_popup {
+            shell_popup
+                .input
+                .insert(shell_popup.cursor_position, new_char);
+
+            self.move_cursor_right();
+        }
+    }
+
+    fn move_cursor_left(&mut self) {
+        if let Popup::Shell(ref mut shell_popup) = self.show_popup {
+            let cursor_moved_left = shell_popup.cursor_position.saturating_sub(1);
+            let length = shell_popup.input.len();
+            shell_popup.cursor_position = cursor_moved_left.clamp(0, length);
+        }
+    }
+
+    fn move_cursor_right(&mut self) {
+        if let Popup::Shell(ref mut shell_popup) = self.show_popup {
+            let cursor_moved_right = shell_popup.cursor_position.saturating_add(1);
+            let length = shell_popup.input.len();
+            shell_popup.cursor_position = cursor_moved_right.clamp(0, length);
         }
     }
 }
@@ -190,6 +287,11 @@ impl Component for Containers {
                     tx.send(action)?;
                 }
             }
+            (Action::CustomShell, Popup::None) => {
+                if let Some((cid, _cname)) = self.get_selected_container_info() {
+                    self.show_popup = Popup::Shell(ShellPopup::new(cid));
+                }
+            }
             (Action::Delete, Popup::None) => {
                 if let Some((cid, cname)) = self.get_selected_container_info() {
                     self.show_popup = Popup::Delete(cid, cname);
@@ -208,7 +310,16 @@ impl Component for Containers {
                     }
                 });
             }
-            (Action::PreviousScreen, Popup::Delete(_, _)) => {
+            (Action::Ok, Popup::Shell(shell)) => {
+                let action = Action::Screen(super::ComponentInit::ContainerExec(
+                    shell.cid,
+                    Some(shell.input),
+                ));
+                tx.send(Action::Suspend)?;
+                tx.send(action)?;
+            }
+            (Action::PreviousScreen, Popup::Delete(_, _))
+            | (Action::PreviousScreen, Popup::Shell(_)) => {
                 self.show_popup = Popup::None;
             }
             _ => {}
@@ -233,6 +344,32 @@ impl Component for Containers {
         f.render_stateful_widget(t, rects[0], &mut self.state);
 
         self.draw_popup(f);
+    }
+
+    fn handle_input(&mut self, kevent: event::KeyEvent) -> Result<()> {
+        if let Popup::Shell(ref mut _shell_popup) = self.show_popup {
+            if kevent.kind == KeyEventKind::Press {
+                match kevent.code {
+                    KeyCode::Char(to_insert) => {
+                        self.enter_char(to_insert);
+                    }
+                    KeyCode::Backspace => {
+                        self.delete_char();
+                    }
+                    KeyCode::Left => {
+                        self.move_cursor_left();
+                    }
+                    KeyCode::Right => {
+                        self.move_cursor_right();
+                    }
+                    KeyCode::Esc => {
+                        self.show_popup = Popup::None;
+                    }
+                    _ => {}
+                }
+            };
+        }
+        Ok(())
     }
 }
 
