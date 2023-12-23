@@ -1,13 +1,5 @@
-use std::collections::HashMap;
-
-use bollard::service::ImageSummary;
-use chrono::{DateTime, Utc};
 use color_eyre::Result;
 
-use humansize::{FormatSizeI, BINARY};
-
-use bollard::image::{ListImagesOptions, RemoveImageOptions};
-use bollard::Docker;
 use futures::executor::block_on;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Style, Stylize};
@@ -18,7 +10,8 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::action::Action;
 use crate::components::Component;
-use crate::utils::{centered_rect, get_or_not_found, table};
+use crate::runtime::{delete_image, list_images};
+use crate::utils::{centered_rect, table};
 
 const IMAGE_CONSTRAINTS: [Constraint; 4] = [
     Constraint::Max(15),
@@ -34,7 +27,6 @@ enum Popup {
 }
 
 pub struct Images {
-    filters: HashMap<String, Vec<String>>,
     state: TableState,
     images: Vec<[String; 4]>,
     show_popup: Popup,
@@ -44,7 +36,6 @@ pub struct Images {
 impl Images {
     pub fn new() -> Self {
         Images {
-            filters: HashMap::new(),
             state: Default::default(),
             images: Vec::new(),
             show_popup: Popup::None,
@@ -133,34 +124,10 @@ impl Component for Images {
     }
 
     fn update(&mut self, action: Action) -> Result<()> {
+        let tx = self.action_tx.clone().expect("No action sender available");
         match action {
             Action::Tick => {
-                let options = ListImagesOptions {
-                    filters: self.filters.clone(),
-                    ..Default::default()
-                };
-
-                self.images = block_on(async {
-                    let docker_cli = Docker::connect_with_socket_defaults()
-                        .expect("Unable to connect to docker");
-                    let images = docker_cli
-                        .list_images(Some(options))
-                        .await
-                        .expect("Unable to list images");
-                    images
-                        .iter()
-                        .map(|i: &ImageSummary| {
-                            [
-                                i.id.to_string().split(':').last().unwrap()[0..12].to_string(),
-                                get_or_not_found!(i.repo_tags.first()),
-                                i.size.format_size_i(BINARY),
-                                DateTime::<Utc>::from_timestamp(i.created, 0)
-                                    .expect("Unable to parse timestamp")
-                                    .to_string(),
-                            ]
-                        })
-                        .collect()
-                });
+                self.images = block_on(list_images())?;
             }
             Action::Down => {
                 self.next();
@@ -175,20 +142,15 @@ impl Component for Images {
             }
             Action::Ok => {
                 if let Popup::Delete(id, _) = &self.show_popup.clone() {
-                    block_on(async {
-                        if let Some(tx) = self.action_tx.clone() {
-                            if let Err(e) = delete_image(id).await {
-                                tx.send(Action::Error(format!(
-                                    "Unable to delete container \"{}\" {}",
-                                    id, e
-                                )))
-                                .expect("Unable to send error");
-                            } else {
-                                self.show_popup = Popup::None;
-                                tx.send(Action::Tick).expect("Unable to send tick");
-                            }
-                        }
-                    });
+                    if let Err(e) = block_on(delete_image(id)) {
+                        tx.send(Action::Error(format!(
+                            "Unable to delete container \"{}\" {}",
+                            id, e
+                        )))?;
+                    } else {
+                        self.show_popup = Popup::None;
+                        tx.send(Action::Tick)?;
+                    }
                 };
             }
             Action::PreviousScreen => {
@@ -213,15 +175,4 @@ impl Component for Images {
 
         self.draw_popup(f);
     }
-}
-
-async fn delete_image(id: &str) -> Result<()> {
-    let options = RemoveImageOptions {
-        force: true,
-        ..Default::default()
-    };
-    let docker_cli = Docker::connect_with_socket_defaults()?;
-    // TODO: Handle error correctly
-    docker_cli.remove_image(id, Some(options), None).await?;
-    Ok(())
 }

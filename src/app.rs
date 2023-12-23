@@ -1,25 +1,21 @@
 use color_eyre::Result;
 use crossterm::event::{self, KeyCode, KeyEventKind, KeyModifiers};
-use ratatui::layout::{Constraint, Direction, Layout, Rect};
-use ratatui::style::{Style, Stylize};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph, Wrap};
+use ratatui::prelude::*;
+use ratatui::widgets::{Block, Borders, Paragraph};
 use tokio::sync::mpsc::{self, UnboundedSender};
-use tracing::{span, Level};
 
 use crate::action::Action;
 use crate::components::containers::Containers;
 use crate::components::{Component, ComponentInit};
 use crate::tui;
-use crate::utils::centered_rect;
+use crate::utils::toast;
 
 enum InputMode {
     None,
     Change,
-    //TODO Filter
 }
 
-const DEFAULT_TOAST_DELAY: usize = 5;
+const DEFAULT_TOAST_DELAY: usize = 8;
 
 const CONTAINERS: &str = "containers";
 const IMAGES: &str = "images";
@@ -30,7 +26,11 @@ const SUGGESTIONS: [&str; 4] = [CONTAINERS, IMAGES, NETWORKS, VOLUMES];
 
 pub enum Popup {
     None,
-    Error(String, usize),
+    Error {
+        msg: String,
+        timeout: usize,
+        ttl: usize,
+    },
 }
 
 pub struct App {
@@ -74,10 +74,7 @@ impl App {
         main.register_action_handler(action_tx.clone());
 
         loop {
-            let loop_span = span!(Level::TRACE, "loop").entered();
-            let event_span = span!(Level::TRACE, "tui event").entered();
             if let Some(event) = tui.next().await {
-                event_span.record("event", format!("{:?}", event));
                 match event {
                     tui::Event::Tick => action_tx.send(Action::Tick)?,
                     tui::Event::Render => action_tx.send(Action::Render)?,
@@ -94,11 +91,8 @@ impl App {
                     _ => {}
                 }
             }
-            event_span.exit();
 
             while let Ok(action) = action_rx.try_recv() {
-                let action_span = span!(Level::TRACE, "action").entered();
-                action_span.record("action", format!("{:?}", &action));
                 match action {
                     Action::Quit => self.should_quit = true,
                     Action::Suspend => self.should_suspend = true,
@@ -107,7 +101,6 @@ impl App {
                         tui.resume()?;
                     }
                     Action::Resize(w, h) => {
-                        let resize_span = span!(Level::TRACE, "resize").entered();
                         tui.resize(Rect::new(0, 0, w, h))?;
 
                         let main_layout = Layout::default()
@@ -124,10 +117,8 @@ impl App {
                             self.draw_popup(f);
                             self.draw_status(f, main_layout[2]);
                         })?;
-                        resize_span.exit();
                     }
                     Action::Render => {
-                        let render_span = span!(Level::TRACE, "render").entered();
                         let main_layout = Layout::default()
                             .direction(Direction::Vertical)
                             .constraints([
@@ -145,12 +136,11 @@ impl App {
                             self.draw_popup(f);
                             self.draw_status(f, main_layout[2]);
                         })?;
-                        render_span.exit();
                     }
                     Action::Tick => {
-                        if let Popup::Error(_msg, timeout) = &mut self.show_popup {
-                            if *timeout > 0 {
-                                *timeout = timeout.saturating_sub(1);
+                        if let Popup::Error { ttl, .. } = &mut self.show_popup {
+                            if *ttl > 0 {
+                                *ttl = ttl.saturating_sub(1);
                             } else {
                                 self.show_popup = Popup::None;
                             }
@@ -170,12 +160,16 @@ impl App {
                         if let InputMode::Change = self.input_mode {
                             self.reset_input();
                         }
-                        if let Popup::Error(_, _) = self.show_popup {
+                        if let Popup::Error { .. } = self.show_popup {
                             self.show_popup = Popup::None;
                         }
                     }
                     Action::Error(ref msg) => {
-                        self.show_popup = Popup::Error(msg.to_string(), DEFAULT_TOAST_DELAY);
+                        self.show_popup = Popup::Error {
+                            msg: msg.to_string(),
+                            timeout: DEFAULT_TOAST_DELAY,
+                            ttl: DEFAULT_TOAST_DELAY,
+                        };
                     }
                     _ => {}
                 };
@@ -185,7 +179,6 @@ impl App {
                     }
                     InputMode::Change => {}
                 }
-                action_span.exit();
             }
             if self.should_suspend {
                 tui.suspend()?;
@@ -198,7 +191,6 @@ impl App {
                 tui.stop()?;
                 break;
             }
-            loop_span.exit();
         }
         tui.exit()?;
         Ok(())
@@ -388,27 +380,10 @@ impl App {
         Ok(())
     }
 
-    fn draw_popup(&mut self, f: &mut ratatui::prelude::Frame<'_>) {
-        if let Popup::Error(msg, timeout) = &mut self.show_popup {
-            let text = vec![
-                Line::from(vec![Span::styled(msg.to_string(), Style::new().gray())]),
-                Line::from(""),
-                Line::from(format!("This popup will disappear in {}s", timeout)),
-                Line::from(vec![
-                    Span::from("Press "),
-                    Span::styled("ESC", Style::new().bold()),
-                    Span::from(" to cancel"),
-                ]),
-            ];
-            let paragraph = Paragraph::new(text).wrap(Wrap { trim: false });
-
-            let block = Block::default()
-                .title("Error".bold().red())
-                .padding(Padding::new(1, 1, 1, 1))
-                .borders(Borders::ALL);
-            let area = centered_rect(60, 15, f.size());
-            f.render_widget(Clear, area); //this clears out the background
-            f.render_widget(paragraph.block(block), area);
+    fn draw_popup(&mut self, f: &mut Frame<'_>) {
+        if let Popup::Error { msg, timeout, ttl } = &mut self.show_popup {
+            let title = Span::styled("Error", Style::new().red());
+            toast(f, title, msg, *timeout, *ttl);
         }
     }
 }
