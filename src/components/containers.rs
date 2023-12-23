@@ -50,12 +50,27 @@ impl ShellPopup {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum SortOrder {
+    Asc,
+    Desc,
+}
+
+#[derive(Clone, Debug)]
+pub enum SortColumn {
+    Id(SortOrder),
+    Name(SortOrder),
+    Image(SortOrder),
+    Status(SortOrder),
+}
+
 pub struct Containers {
     all: bool,
     state: TableState,
     containers: Vec<[String; 4]>,
     show_popup: Popup,
     action_tx: Option<UnboundedSender<Action>>,
+    sort_by: SortColumn,
 }
 
 impl Containers {
@@ -66,6 +81,7 @@ impl Containers {
             containers: Vec::new(),
             show_popup: Popup::None,
             action_tx: None,
+            sort_by: SortColumn::Name(SortOrder::Asc),
         }
     }
 
@@ -217,6 +233,21 @@ impl Containers {
             shell_popup.cursor_position = cursor_moved_right.clamp(0, length);
         }
     }
+
+    fn sort(&mut self) {
+        self.containers.sort_by(|a, b| {
+            let (idx, o) = match &self.sort_by {
+                SortColumn::Id(o) => (0, o),
+                SortColumn::Name(o) => (1, o),
+                SortColumn::Image(o) => (2, o),
+                SortColumn::Status(o) => (3, o),
+            };
+            match o {
+                SortOrder::Asc => a[idx].cmp(&b[idx]),
+                SortOrder::Desc => b[idx].cmp(&a[idx]),
+            }
+        });
+    }
 }
 
 impl Component for Containers {
@@ -245,6 +276,7 @@ impl Component for Containers {
                         vec![]
                     }
                 };
+                self.sort();
             }
             (Action::Down, Popup::None) => {
                 self.next();
@@ -314,6 +346,19 @@ impl Component for Containers {
             (Action::PreviousScreen, Popup::Delete(_, _))
             | (Action::PreviousScreen, Popup::Shell(_)) => {
                 self.show_popup = Popup::None;
+            }
+            (Action::SortColumn(n), Popup::None) => {
+                self.sort_by = match (n, &self.sort_by) {
+                    (1, SortColumn::Id(SortOrder::Asc)) => SortColumn::Id(SortOrder::Desc),
+                    (1, _) => SortColumn::Id(SortOrder::Asc),
+                    (2, SortColumn::Name(SortOrder::Asc)) => SortColumn::Name(SortOrder::Desc),
+                    (2, _) => SortColumn::Name(SortOrder::Asc),
+                    (3, SortColumn::Image(SortOrder::Asc)) => SortColumn::Image(SortOrder::Desc),
+                    (3, _) => SortColumn::Image(SortOrder::Asc),
+                    (4, SortColumn::Status(SortOrder::Asc)) => SortColumn::Status(SortOrder::Desc),
+                    (4, _) => SortColumn::Status(SortOrder::Asc),
+                    _ => self.sort_by.clone(),
+                }
             }
             _ => {}
         }
