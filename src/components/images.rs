@@ -208,7 +208,7 @@ impl Component for Images {
                 self.sort_by = match (n, &self.sort_by) {
                     (1, SortColumn::Id(SortOrder::Asc)) => SortColumn::Id(SortOrder::Desc),
                     (1, _) => SortColumn::Id(SortOrder::Asc),
-                    (2, SortColumn::Name(SortOrder::Asc)) => SortColumn::Age(SortOrder::Desc),
+                    (2, SortColumn::Name(SortOrder::Asc)) => SortColumn::Name(SortOrder::Desc),
                     (2, _) => SortColumn::Name(SortOrder::Asc),
                     (3, SortColumn::Size(SortOrder::Asc)) => SortColumn::Size(SortOrder::Desc),
                     (3, _) => SortColumn::Size(SortOrder::Asc),
