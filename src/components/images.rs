@@ -10,7 +10,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::action::Action;
 use crate::components::Component;
-use crate::runtime::{delete_image, list_images};
+use crate::runtime::{delete_image, get_image, list_images};
 use crate::utils::{centered_rect, table};
 
 const IMAGE_CONSTRAINTS: [Constraint; 4] = [
@@ -134,6 +134,22 @@ impl Component for Images {
             }
             Action::Up => {
                 self.previous();
+            }
+            Action::Inspect => {
+                if let Some(info) = self.get_selected_image_info() {
+                    let id = info.0.to_string();
+                    let name = info.1.to_string();
+                    let action = match block_on(get_image(&id)) {
+                        Ok(details) => {
+                            Action::Screen(super::ComponentInit::ImageInspect(id, name, details))
+                        }
+                        Err(e) => Action::Error(format!(
+                            "Unable to get image \"{}\" details:\n{}",
+                            name, e
+                        )),
+                    };
+                    tx.send(action)?;
+                };
             }
             Action::Delete => {
                 if let Some((id, tag)) = self.get_selected_image_info() {

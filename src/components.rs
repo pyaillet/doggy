@@ -9,6 +9,7 @@ use crate::action::Action;
 use crate::components::container_exec::ContainerExec;
 use crate::components::container_inspect::ContainerDetails;
 use crate::components::containers::Containers;
+use crate::components::image_inspect::ImageInspect;
 use crate::components::images::Images;
 use crate::components::networks::Networks;
 use crate::components::volumes::Volumes;
@@ -17,6 +18,7 @@ use crate::tui;
 pub mod container_exec;
 pub mod container_inspect;
 pub mod containers;
+pub mod image_inspect;
 pub mod images;
 pub mod networks;
 pub mod volumes;
@@ -27,6 +29,7 @@ pub(crate) enum ComponentInit {
     ContainerExec(String, String, Option<String>),
     ContainerInspect(String, String, String),
     Images,
+    ImageInspect(String, String, String),
     Networks,
     Volumes,
 }
@@ -42,6 +45,9 @@ impl ComponentInit {
                 Box::new(ContainerExec::new(id, cname, cmd))
             }
             ComponentInit::Images => Box::new(Images::new()),
+            ComponentInit::ImageInspect(id, name, details) => {
+                Box::new(ImageInspect::new(id, name, details))
+            }
             ComponentInit::Networks => Box::new(Networks::new()),
             ComponentInit::Volumes => Box::new(Volumes::new()),
         }

@@ -1,7 +1,7 @@
 use bollard::{
     container::{InspectContainerOptions, ListContainersOptions, RemoveContainerOptions},
     image::{ListImagesOptions, RemoveImageOptions},
-    network::ListNetworksOptions,
+    network::{InspectNetworkOptions, ListNetworksOptions},
     service::{ImageSummary, Network, Volume},
     volume::{ListVolumesOptions, RemoveVolumeOptions},
     Docker,
@@ -37,15 +37,23 @@ pub(crate) async fn list_volumes() -> Result<Vec<[String; 4]>> {
     Ok(volumes)
 }
 
+#[allow(dead_code)]
+pub(crate) async fn get_volume(id: &str) -> Result<String> {
+    let docker_cli = Docker::connect_with_socket_defaults()?;
+    let volume = docker_cli.inspect_volume(id).await?;
+    Ok(serde_json::to_string_pretty(&volume)?)
+}
+
 pub(crate) async fn delete_volume(id: &str) -> Result<()> {
     let options = RemoveVolumeOptions { force: true };
     let docker_cli = Docker::connect_with_socket_defaults()?;
     docker_cli.remove_volume(id, Some(options)).await?;
     Ok(())
 }
+
 pub(crate) async fn list_networks() -> Result<Vec<[String; 4]>> {
     let options: ListNetworksOptions<String> = Default::default();
-    let docker_cli = Docker::connect_with_socket_defaults().expect("Unable to connect to docker");
+    let docker_cli = Docker::connect_with_socket_defaults()?;
     let networks = docker_cli.list_networks(Some(options)).await?;
     let networks = networks
         .iter()
@@ -59,6 +67,21 @@ pub(crate) async fn list_networks() -> Result<Vec<[String; 4]>> {
         })
         .collect();
     Ok(networks)
+}
+
+#[allow(dead_code)]
+pub(crate) async fn get_network(id: &str) -> Result<String> {
+    let docker_cli = Docker::connect_with_socket_defaults()?;
+    let network = docker_cli
+        .inspect_network(
+            id,
+            Some(InspectNetworkOptions::<String> {
+                verbose: true,
+                ..Default::default()
+            }),
+        )
+        .await?;
+    Ok(serde_json::to_string_pretty(&network)?)
 }
 
 pub(crate) async fn delete_network(id: &str) -> Result<()> {
@@ -84,6 +107,12 @@ pub(crate) async fn list_images() -> Result<Vec<[String; 4]>> {
         })
         .collect();
     Ok(images)
+}
+
+pub(crate) async fn get_image(id: &str) -> Result<String> {
+    let docker_cli = Docker::connect_with_socket_defaults()?;
+    let image = docker_cli.inspect_image(id).await?;
+    Ok(serde_json::to_string_pretty(&image)?)
 }
 
 pub(crate) async fn delete_image(id: &str) -> Result<()> {
@@ -132,7 +161,7 @@ pub(crate) async fn list_containers(all: bool) -> Result<Vec<[String; 4]>> {
     Ok(containers)
 }
 
-pub(crate) async fn get_container_details(cid: &str) -> Result<String> {
+pub(crate) async fn get_container(cid: &str) -> Result<String> {
     let docker_cli = Docker::connect_with_socket_defaults()?;
     let container_details = docker_cli
         .inspect_container(cid, Some(InspectContainerOptions { size: false }))
