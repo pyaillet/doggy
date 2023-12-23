@@ -15,7 +15,7 @@ use ratatui::Frame;
 use tokio::io::{stdin, AsyncReadExt, AsyncWriteExt};
 use tokio::select;
 use tokio::sync::mpsc::UnboundedSender;
-use tokio::sync::oneshot::{channel, Receiver};
+use tokio::sync::oneshot::channel;
 use tokio::task::spawn;
 
 use crate::action::Action;
@@ -29,6 +29,7 @@ pub struct ContainerExec {
     cname: String,
     command: String,
     action_tx: Option<UnboundedSender<Action>>,
+    should_stop: bool,
 }
 
 impl ContainerExec {
@@ -39,10 +40,12 @@ impl ContainerExec {
             cname,
             command: command.unwrap_or(DEFAULT_CMD.to_string()),
             action_tx: None,
+            should_stop: false,
         }
     }
 
-    async fn exec(&mut self, mut rx: Receiver<usize>) -> Result<()> {
+    async fn exec(&mut self) -> Result<()> {
+        let (tx_stdin_loop, mut rx) = channel();
         let tty_size = crossterm::terminal::size()?;
         let mut stdout = std::io::stdout();
 
@@ -101,6 +104,7 @@ impl ContainerExec {
             }
 
             log::debug!("Closing terminal");
+            tx_stdin_loop.send(()).expect("Unable to cancel stdin task");
             handle.await?;
         }
         Ok(())
@@ -117,7 +121,8 @@ impl Component for ContainerExec {
     }
 
     fn setup(&mut self, t: &mut tui::Tui) -> Result<()> {
-        t.stop()
+        t.stop()?;
+        Ok(())
     }
 
     fn teardown(&mut self, t: &mut tui::Tui) -> Result<()> {
@@ -129,17 +134,18 @@ impl Component for ContainerExec {
     fn update(&mut self, _action: Action) -> Result<()> {
         let tx = self.action_tx.clone().expect("Unable to get event sender");
 
-        let (tx_stdin_loop, rx) = channel();
-        let res = block_on(self.exec(rx));
+        if !self.should_stop {
+            let res = block_on(self.exec());
 
-        tx_stdin_loop.send(0).expect("Unable to cancel stdin task");
-        tx.send(Action::Resume)?;
-        tx.send(Action::Screen(super::ComponentInit::Containers))?;
-        if let Err(e) = res {
-            tx.send(Action::Error(format!(
-                "Unable to execute command \"{}\" in container \"{}\"\n{}",
-                self.command, self.cname, e
-            )))?;
+            self.should_stop = true;
+            tx.send(Action::Resume)?;
+            tx.send(Action::Screen(super::ComponentInit::Containers))?;
+            if let Err(e) = res {
+                tx.send(Action::Error(format!(
+                    "Unable to execute command \"{}\" in container \"{}\"\n{}",
+                    self.command, self.cname, e
+                )))?;
+            }
         }
         Ok(())
     }

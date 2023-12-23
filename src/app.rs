@@ -15,7 +15,7 @@ enum InputMode {
     Change,
 }
 
-const DEFAULT_TOAST_DELAY: usize = 5;
+const DEFAULT_TOAST_DELAY: usize = 8;
 
 const CONTAINERS: &str = "containers";
 const IMAGES: &str = "images";

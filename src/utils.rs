@@ -10,7 +10,9 @@ use opentelemetry::global;
 
 use ratatui::{
     prelude::*,
-    widgets::{block::Title, Block, Borders, Cell, Clear, Padding, Paragraph, Row, Table, Wrap},
+    widgets::{
+        block::Title, Block, Borders, Cell, Clear, LineGauge, Padding, Paragraph, Row, Table, Wrap,
+    },
 };
 
 pub static GIT_COMMIT_HASH: &str = env!("DOGGY_GIT_INFO");
@@ -102,14 +104,27 @@ pub fn centered_rect(size_x: u16, size_y: u16, r: Rect) -> Rect {
         .split(popup_layout[1])[1]
 }
 
-pub fn toast<'a, T>(f: &mut Frame<'_>, title: T, msg: &str, timeout: usize, _ttl: usize)
+pub fn toast<'a, T>(f: &mut Frame<'_>, title: T, msg: &str, timeout: usize, ttl: usize)
 where
     T: Into<Title<'a>>,
 {
+    let width = 60;
+
+    let lg = LineGauge::default()
+        .block(Block::default().borders(Borders::NONE))
+        .label("")
+        .gauge_style(
+            Style::default()
+                .fg(Color::White)
+                .bg(Color::Black)
+                .add_modifier(Modifier::BOLD),
+        )
+        .line_set(symbols::line::THICK)
+        .ratio(((timeout - ttl) as f64) / (timeout as f64));
+
     let text = vec![
         Line::from(msg),
         Line::from(""),
-        Line::from(format!("This popup will disappear in {}s", timeout)),
         Line::from(vec![
             Span::from("Press "),
             Span::styled("ESC", Style::new().bold()),
@@ -119,15 +134,26 @@ where
     let paragraph = Paragraph::new(text)
         .wrap(Wrap { trim: false })
         .alignment(Alignment::Center);
-    let line_count: u16 = paragraph.line_count(60).try_into().expect("To much lines");
+    let line_count: u16 = paragraph
+        .line_count(width - 4)
+        .try_into()
+        .expect("Too much lines");
 
     let block = Block::default()
         .title(title)
         .padding(Padding::new(1, 1, 1, 1))
         .borders(Borders::ALL);
-    let area = centered_rect(60, line_count + 3, f.size());
+    let area = centered_rect(width, line_count + 4, f.size());
+    let pg_area = Rect::new(
+        area.x,
+        area.y + area.height - 2,
+        area.width - 1,
+        area.height,
+    );
+
     f.render_widget(Clear, area); //this clears out the background
     f.render_widget(paragraph.block(block), area);
+    f.render_widget(lg, pg_area);
 }
 
 pub fn initialize_panic_handler() -> Result<()> {
