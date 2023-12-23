@@ -366,6 +366,7 @@ impl App {
             KeyCode::Char('k') | KeyCode::Up => action_tx.send(Action::Up)?,
             KeyCode::Char('h') | KeyCode::Left => action_tx.send(Action::Left)?,
             KeyCode::Char('l') | KeyCode::Right => action_tx.send(Action::Right)?,
+            KeyCode::F(n) => action_tx.send(Action::SortColumn(n))?,
             KeyCode::PageUp => action_tx.send(Action::PageUp)?,
             KeyCode::PageDown => action_tx.send(Action::PageDown)?,
             KeyCode::Esc => action_tx.send(Action::PreviousScreen)?,

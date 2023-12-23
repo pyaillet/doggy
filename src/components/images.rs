@@ -31,6 +31,21 @@ pub struct Images {
     images: Vec<[String; 4]>,
     show_popup: Popup,
     action_tx: Option<UnboundedSender<Action>>,
+    sort_by: SortColumn,
+}
+
+#[derive(Clone, Debug)]
+pub enum SortOrder {
+    Asc,
+    Desc,
+}
+
+#[derive(Clone, Debug)]
+pub enum SortColumn {
+    Id(SortOrder),
+    Name(SortOrder),
+    Size(SortOrder),
+    Age(SortOrder),
 }
 
 impl Images {
@@ -40,6 +55,7 @@ impl Images {
             images: Vec::new(),
             show_popup: Popup::None,
             action_tx: None,
+            sort_by: SortColumn::Age(SortOrder::Asc),
         }
     }
 
@@ -112,6 +128,21 @@ impl Images {
             f.render_widget(paragraph.block(block), area);
         }
     }
+
+    fn sort(&mut self) {
+        self.images.sort_by(|a, b| {
+            let (idx, o) = match &self.sort_by {
+                SortColumn::Id(o) => (0, o),
+                SortColumn::Name(o) => (1, o),
+                SortColumn::Size(o) => (2, o),
+                SortColumn::Age(o) => (3, o),
+            };
+            match o {
+                SortOrder::Asc => a[idx].cmp(&b[idx]),
+                SortOrder::Desc => b[idx].cmp(&a[idx]),
+            }
+        });
+    }
 }
 
 impl Component for Images {
@@ -128,6 +159,7 @@ impl Component for Images {
         match action {
             Action::Tick => {
                 self.images = block_on(list_images())?;
+                self.sort();
             }
             Action::Down => {
                 self.next();
@@ -171,6 +203,19 @@ impl Component for Images {
             }
             Action::PreviousScreen => {
                 self.show_popup = Popup::None;
+            }
+            Action::SortColumn(n) => {
+                self.sort_by = match (n, &self.sort_by) {
+                    (1, SortColumn::Id(SortOrder::Asc)) => SortColumn::Id(SortOrder::Desc),
+                    (1, _) => SortColumn::Id(SortOrder::Asc),
+                    (2, SortColumn::Name(SortOrder::Asc)) => SortColumn::Age(SortOrder::Desc),
+                    (2, _) => SortColumn::Name(SortOrder::Asc),
+                    (3, SortColumn::Size(SortOrder::Asc)) => SortColumn::Size(SortOrder::Desc),
+                    (3, _) => SortColumn::Size(SortOrder::Asc),
+                    (4, SortColumn::Age(SortOrder::Asc)) => SortColumn::Age(SortOrder::Desc),
+                    (4, _) => SortColumn::Age(SortOrder::Asc),
+                    _ => self.sort_by.clone(),
+                }
             }
             _ => {}
         };
