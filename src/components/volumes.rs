@@ -25,11 +25,26 @@ enum Popup {
     Delete(String),
 }
 
+#[derive(Clone, Debug)]
+pub enum SortOrder {
+    Asc,
+    Desc,
+}
+
+#[derive(Clone, Debug)]
+pub enum SortColumn {
+    Id(SortOrder),
+    Driver(SortOrder),
+    Size(SortOrder),
+    Age(SortOrder),
+}
+
 pub struct Volumes {
     state: TableState,
     volumes: Vec<[String; 4]>,
     show_popup: Popup,
     action_tx: Option<UnboundedSender<Action>>,
+    sort_by: SortColumn,
 }
 
 impl Volumes {
@@ -39,6 +54,7 @@ impl Volumes {
             volumes: Vec::new(),
             show_popup: Popup::None,
             action_tx: None,
+            sort_by: SortColumn::Id(SortOrder::Asc),
         }
     }
 
@@ -109,6 +125,21 @@ impl Volumes {
             f.render_widget(paragraph.block(block), area);
         }
     }
+
+    fn sort(&mut self) {
+        self.volumes.sort_by(|a, b| {
+            let (idx, o) = match &self.sort_by {
+                SortColumn::Id(o) => (0, o),
+                SortColumn::Driver(o) => (1, o),
+                SortColumn::Size(o) => (2, o),
+                SortColumn::Age(o) => (3, o),
+            };
+            match o {
+                SortOrder::Asc => a[idx].cmp(&b[idx]),
+                SortOrder::Desc => b[idx].cmp(&a[idx]),
+            }
+        });
+    }
 }
 
 impl Component for Volumes {
@@ -124,7 +155,10 @@ impl Component for Volumes {
         let tx = self.action_tx.clone().expect("No action sender available");
         match action {
             Action::Tick => match block_on(list_volumes()) {
-                Ok(volumes) => self.volumes = volumes,
+                Ok(volumes) => {
+                    self.volumes = volumes;
+                    self.sort();
+                }
                 Err(e) => tx.send(Action::Error(format!("Error listing volumes:\n{}", e)))?,
             },
             Action::Down => {
@@ -169,6 +203,19 @@ impl Component for Volumes {
             Action::PreviousScreen => {
                 self.show_popup = Popup::None;
             }
+            Action::SortColumn(n) => {
+                self.sort_by = match (n, &self.sort_by) {
+                    (1, SortColumn::Id(SortOrder::Asc)) => SortColumn::Id(SortOrder::Desc),
+                    (1, _) => SortColumn::Id(SortOrder::Asc),
+                    (2, SortColumn::Driver(SortOrder::Asc)) => SortColumn::Driver(SortOrder::Desc),
+                    (2, _) => SortColumn::Driver(SortOrder::Asc),
+                    (3, SortColumn::Size(SortOrder::Asc)) => SortColumn::Size(SortOrder::Desc),
+                    (3, _) => SortColumn::Size(SortOrder::Asc),
+                    (4, SortColumn::Age(SortOrder::Asc)) => SortColumn::Age(SortOrder::Desc),
+                    (4, _) => SortColumn::Age(SortOrder::Asc),
+                    _ => self.sort_by.clone(),
+                }
+            }
             _ => {}
         };
         Ok(())
@@ -180,7 +227,7 @@ impl Component for Volumes {
             .split(area);
         let t = table(
             self.get_name().to_string(),
-            ["Name", "Driver", "Size", "Age"],
+            ["Id", "Driver", "Size", "Age"],
             self.volumes.clone(),
             &VOLUME_CONSTRAINTS,
         );
