@@ -27,9 +27,9 @@ You can download one of the binary from the release page
 
 - Change view: `:` and resource name (`containers`, `images`, `networks`, `volumes`)
 - Show/hide stopped containers: `a`
-- Inspect container: `i` 
 - Launch `/bin/bash` in the container: `s`
 - Launch a custom command in the container: `S`
+- Inspect resource: `i` 
 - Delete a resource: `Ctrl+d`
 - Browse lists:
   - Up: `↑` or `j`
@@ -45,10 +45,13 @@ You can download one of the binary from the release page
 - [x] Exec `/bin/bash` in a container
 - [x] Delete containers (running or stopped)
 - [x] List images
+- [x] Inspect image
 - [ ] Filter the image list
 - [x] Delete images (not used by any container)
 - [x] List networks
+- [x] Inspect network
 - [x] Delete network
 - [x] List volumes
+- [x] Inspect volume
 - [x] Delete volume
 
