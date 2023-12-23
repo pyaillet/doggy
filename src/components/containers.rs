@@ -1,9 +1,3 @@
-use std::collections::HashMap;
-
-use bollard::{
-    container::{ListContainersOptions, RemoveContainerOptions},
-    Docker,
-};
 use color_eyre::Result;
 
 use crossterm::event::{self, KeyCode, KeyEventKind};
@@ -16,12 +10,13 @@ use ratatui::{
     Frame,
 };
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::instrument;
 
-use crate::components::Component;
-use crate::utils::get_or_not_found;
 use crate::utils::table;
 use crate::{action::Action, utils::centered_rect};
+use crate::{
+    components::Component,
+    runtime::{delete_container, get_container_details, list_containers},
+};
 
 const CONTAINER_CONSTRAINTS: [Constraint; 4] = [
     Constraint::Min(14),
@@ -57,7 +52,6 @@ impl ShellPopup {
 
 pub struct Containers {
     all: bool,
-    filters: HashMap<String, Vec<String>>,
     state: TableState,
     containers: Vec<[String; 4]>,
     show_popup: Popup,
@@ -68,7 +62,6 @@ impl Containers {
     pub fn new() -> Self {
         Containers {
             all: false,
-            filters: HashMap::new(),
             state: Default::default(),
             containers: Vec::new(),
             show_popup: Popup::None,
@@ -235,13 +228,6 @@ impl Component for Containers {
         self.action_tx = Some(tx);
     }
 
-    #[instrument(
-        name = "Containers::update",
-        skip(self),
-        fields(
-            action = %action
-        ),
-    )]
     fn update(&mut self, action: Action) -> Result<()> {
         let tx = self
             .action_tx
@@ -249,25 +235,16 @@ impl Component for Containers {
             .expect("Action tx queue not initialized");
         match (action, self.show_popup.clone()) {
             (Action::Tick, Popup::None) => {
-                let options = ListContainersOptions {
-                    all: self.all,
-                    filters: self.filters.clone(),
-                    ..Default::default()
-                };
-
-                self.containers = block_on(async {
-                    match list_containers(Some(options)).await {
-                        Ok(containers) => containers,
-                        Err(e) => {
-                            tx.send(Action::Error(format!(
-                                "Error getting container list: {}",
-                                e
-                            )))
-                            .expect("Unable to send message");
-                            vec![]
-                        }
+                self.containers = match block_on(list_containers(self.all)) {
+                    Ok(containers) => containers,
+                    Err(e) => {
+                        tx.send(Action::Error(format!(
+                            "Error getting container list: {}",
+                            e
+                        )))?;
+                        vec![]
                     }
-                });
+                };
             }
             (Action::Down, Popup::None) => {
                 self.next();
@@ -279,14 +256,20 @@ impl Component for Containers {
                 self.all = !self.all;
             }
             (Action::Inspect, Popup::None) => {
-                if let Some(action) = self.get_selected_container_info().map(|cinfo| {
-                    Action::Screen(super::ComponentInit::ContainerInspect(
-                        cinfo.0.to_string(),
-                        cinfo.1.to_string(),
-                    ))
-                }) {
+                if let Some(cinfo) = self.get_selected_container_info() {
+                    let cid = cinfo.0.to_string();
+                    let cname = cinfo.1.to_string();
+                    let action = match block_on(get_container_details(&cid)) {
+                        Ok(details) => Action::Screen(super::ComponentInit::ContainerInspect(
+                            cid, cname, details,
+                        )),
+                        Err(e) => Action::Error(format!(
+                            "Unable to get container \"{}\" details:\n{}",
+                            cname, e
+                        )),
+                    };
                     tx.send(action)?;
-                }
+                };
             }
             (Action::Shell, Popup::None) => {
                 if let Some(action) = self.get_selected_container_info().map(|cinfo| {
@@ -308,7 +291,7 @@ impl Component for Containers {
             }
             (Action::Ok, Popup::Delete(cid, _)) => {
                 block_on(async {
-                    if let Err(e) = delete_container(&cid).await {
+                    if let Err(e) = block_on(delete_container(&cid)) {
                         tx.send(Action::Error(format!(
                             "Unable to delete container \"{}\" {}",
                             cid, e
@@ -337,7 +320,6 @@ impl Component for Containers {
         Ok(())
     }
 
-    #[instrument(name = "Containers::draw", skip(self))]
     fn draw(&mut self, f: &mut Frame<'_>, area: Rect) {
         let rects = Layout::default()
             .constraints([Constraint::Percentage(100)])
@@ -382,38 +364,4 @@ impl Component for Containers {
         }
         Ok(())
     }
-}
-
-#[instrument(name = "containers::delete_container")]
-async fn delete_container(cid: &str) -> Result<()> {
-    let options = RemoveContainerOptions {
-        force: true,
-        ..Default::default()
-    };
-    let docker_cli = Docker::connect_with_socket_defaults()?;
-    docker_cli.remove_container(cid, Some(options)).await?;
-    Ok(())
-}
-
-#[instrument(name = "containers::list_containers", skip(options))]
-async fn list_containers(
-    options: Option<ListContainersOptions<String>>,
-) -> Result<Vec<[String; 4]>> {
-    let docker_cli = Docker::connect_with_socket_defaults().expect("Unable to connect to docker");
-    let containers = docker_cli
-        .list_containers(options)
-        .await
-        .expect("Unable to get container list");
-    let containers = containers
-        .iter()
-        .map(|c| {
-            [
-                get_or_not_found!(c.id),
-                get_or_not_found!(c.names, |c| c.first().and_then(|s| s.split('/').last())),
-                get_or_not_found!(c.image, |i| i.split('@').next()),
-                get_or_not_found!(c.state),
-            ]
-        })
-        .collect();
-    Ok(containers)
 }

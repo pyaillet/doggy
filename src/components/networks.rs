@@ -1,10 +1,5 @@
-use std::collections::HashMap;
-
-use bollard::network::ListNetworksOptions;
-use bollard::service::Network;
 use color_eyre::Result;
 
-use bollard::Docker;
 use futures::executor::block_on;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Style, Stylize};
@@ -15,6 +10,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::action::Action;
 use crate::components::Component;
+use crate::runtime::{delete_network, list_networks};
 use crate::utils::{centered_rect, table};
 
 const NETWORK_CONSTRAINTS: [Constraint; 4] = [
@@ -30,7 +26,6 @@ enum Popup {
 }
 
 pub struct Networks {
-    filters: HashMap<String, Vec<String>>,
     state: TableState,
     networks: Vec<[String; 4]>,
     show_popup: Popup,
@@ -40,7 +35,6 @@ pub struct Networks {
 impl Networks {
     pub fn new() -> Self {
         Networks {
-            filters: HashMap::new(),
             state: Default::default(),
             networks: Vec::new(),
             show_popup: Popup::None,
@@ -127,32 +121,16 @@ impl Component for Networks {
     }
 
     fn update(&mut self, action: Action) -> Result<()> {
+        let tx = self.action_tx.clone().expect("No action sender available");
         match action {
-            Action::Tick => {
-                let options = ListNetworksOptions {
-                    filters: self.filters.clone(),
-                };
-
-                self.networks = block_on(async {
-                    let docker_cli = Docker::connect_with_socket_defaults()
-                        .expect("Unable to connect to docker");
-                    let networks = docker_cli
-                        .list_networks(Some(options))
-                        .await
-                        .expect("Unable to list networks");
-                    networks
-                        .iter()
-                        .map(|n: &Network| {
-                            [
-                                n.id.to_owned().unwrap_or("<Unknown>".to_owned()),
-                                n.name.to_owned().unwrap_or("<Unknown>".to_owned()),
-                                n.driver.to_owned().unwrap_or("<Unknown>".to_owned()),
-                                n.created.to_owned().unwrap_or("<Unknown>".to_owned()),
-                            ]
-                        })
-                        .collect()
-                });
-            }
+            Action::Tick => match block_on(list_networks()) {
+                Ok(networks) => self.networks = networks,
+                Err(e) => self
+                    .action_tx
+                    .clone()
+                    .expect("No action sender availabel")
+                    .send(Action::Error(format!("Unable to list networks:\n{}", e)))?,
+            },
             Action::Down => {
                 self.next();
             }
@@ -166,11 +144,14 @@ impl Component for Networks {
             }
             Action::Ok => {
                 if let Popup::Delete(id) = &self.show_popup {
-                    delete_network(id)?;
-                    self.show_popup = Popup::None;
-                    if let Some(tx) = self.action_tx.clone() {
-                        tx.send(Action::Tick)?;
+                    if let Err(e) = block_on(delete_network(id)) {
+                        tx.send(Action::Error(format!(
+                            "Unable to delete network \"{}\":\n{}",
+                            id, e
+                        )))?;
                     }
+                    self.show_popup = Popup::None;
+                    tx.send(Action::Tick)?;
                 }
             }
             Action::PreviousScreen => {
@@ -195,14 +176,4 @@ impl Component for Networks {
 
         self.draw_popup(f);
     }
-}
-
-fn delete_network(id: &str) -> Result<()> {
-    block_on(async {
-        let docker_cli =
-            Docker::connect_with_socket_defaults().expect("Unable to connect to docker");
-        // TODO: Handle error correctly
-        let _ = docker_cli.remove_network(id).await;
-    });
-    Ok(())
 }

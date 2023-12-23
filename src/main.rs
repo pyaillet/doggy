@@ -6,10 +6,11 @@ use utils::{initialize_logging, initialize_panic_handler, GIT_COMMIT_HASH};
 mod action;
 mod app;
 mod components;
+mod runtime;
 mod tui;
 mod utils;
 
-const DEFAULT_TICK_RATE: f64 = 1.0;
+const DEFAULT_TICK_RATE: f64 = 4.0;
 const DEFAULT_FRAME_RATE: f64 = 30.0;
 
 #[tokio::main]
