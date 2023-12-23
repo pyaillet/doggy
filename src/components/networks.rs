@@ -25,11 +25,26 @@ enum Popup {
     Delete(String),
 }
 
+#[derive(Clone, Debug)]
+pub enum SortOrder {
+    Asc,
+    Desc,
+}
+
+#[derive(Clone, Debug)]
+pub enum SortColumn {
+    Id(SortOrder),
+    Name(SortOrder),
+    Driver(SortOrder),
+    Age(SortOrder),
+}
+
 pub struct Networks {
     state: TableState,
     networks: Vec<[String; 4]>,
     show_popup: Popup,
     action_tx: Option<UnboundedSender<Action>>,
+    sort_by: SortColumn,
 }
 
 impl Networks {
@@ -39,6 +54,7 @@ impl Networks {
             networks: Vec::new(),
             show_popup: Popup::None,
             action_tx: None,
+            sort_by: SortColumn::Name(SortOrder::Asc),
         }
     }
 
@@ -111,6 +127,21 @@ impl Networks {
             f.render_widget(paragraph.block(block), area);
         }
     }
+
+    fn sort(&mut self) {
+        self.networks.sort_by(|a, b| {
+            let (idx, o) = match &self.sort_by {
+                SortColumn::Id(o) => (0, o),
+                SortColumn::Name(o) => (1, o),
+                SortColumn::Driver(o) => (2, o),
+                SortColumn::Age(o) => (3, o),
+            };
+            match o {
+                SortOrder::Asc => a[idx].cmp(&b[idx]),
+                SortOrder::Desc => b[idx].cmp(&a[idx]),
+            }
+        });
+    }
 }
 
 impl Component for Networks {
@@ -126,7 +157,10 @@ impl Component for Networks {
         let tx = self.action_tx.clone().expect("No action sender available");
         match action {
             Action::Tick => match block_on(list_networks()) {
-                Ok(networks) => self.networks = networks,
+                Ok(networks) => {
+                    self.networks = networks;
+                    self.sort();
+                }
                 Err(e) => self
                     .action_tx
                     .clone()
@@ -175,6 +209,19 @@ impl Component for Networks {
             Action::PreviousScreen => {
                 self.show_popup = Popup::None;
             }
+            Action::SortColumn(n) => {
+                self.sort_by = match (n, &self.sort_by) {
+                    (1, SortColumn::Id(SortOrder::Asc)) => SortColumn::Id(SortOrder::Desc),
+                    (1, _) => SortColumn::Id(SortOrder::Asc),
+                    (2, SortColumn::Name(SortOrder::Asc)) => SortColumn::Age(SortOrder::Desc),
+                    (2, _) => SortColumn::Name(SortOrder::Asc),
+                    (3, SortColumn::Driver(SortOrder::Asc)) => SortColumn::Driver(SortOrder::Desc),
+                    (3, _) => SortColumn::Driver(SortOrder::Asc),
+                    (4, SortColumn::Age(SortOrder::Asc)) => SortColumn::Age(SortOrder::Desc),
+                    (4, _) => SortColumn::Age(SortOrder::Asc),
+                    _ => self.sort_by.clone(),
+                }
+            }
             _ => {}
         };
         Ok(())
@@ -186,7 +233,7 @@ impl Component for Networks {
             .split(area);
         let t = table(
             self.get_name().to_string(),
-            ["Id", "Name", "Size", "Age"],
+            ["Id", "Name", "Driver", "Age"],
             self.networks.clone(),
             &NETWORK_CONSTRAINTS,
         );
