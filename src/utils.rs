@@ -10,7 +10,7 @@ use opentelemetry::global;
 
 use ratatui::{
     prelude::*,
-    widgets::{Block, Borders, Cell, Row, Table},
+    widgets::{block::Title, Block, Borders, Cell, Clear, Padding, Paragraph, Row, Table, Wrap},
 };
 
 pub static GIT_COMMIT_HASH: &str = env!("DOGGY_GIT_INFO");
@@ -76,8 +76,7 @@ pub(crate) fn table<'a, const SIZE: usize>(
             .map(|c| Cell::from(c.to_string()).style(normal_style));
         Row::new(cells).style(normal_style).height(1)
     });
-    Table::new(rows)
-        .widths(constraints)
+    Table::new(rows, constraints)
         .header(header)
         .block(Block::default().borders(Borders::ALL).title(title))
         .highlight_style(selected_style)
@@ -101,6 +100,34 @@ pub fn centered_rect(size_x: u16, size_y: u16, r: Rect) -> Rect {
             Constraint::Max((r.width - size_x) / 2),
         ])
         .split(popup_layout[1])[1]
+}
+
+pub fn toast<'a, T>(f: &mut Frame<'_>, title: T, msg: &str, timeout: usize, _ttl: usize)
+where
+    T: Into<Title<'a>>,
+{
+    let text = vec![
+        Line::from(msg),
+        Line::from(""),
+        Line::from(format!("This popup will disappear in {}s", timeout)),
+        Line::from(vec![
+            Span::from("Press "),
+            Span::styled("ESC", Style::new().bold()),
+            Span::from(" to cancel"),
+        ]),
+    ];
+    let paragraph = Paragraph::new(text)
+        .wrap(Wrap { trim: false })
+        .alignment(Alignment::Center);
+    let line_count: u16 = paragraph.line_count(60).try_into().expect("To much lines");
+
+    let block = Block::default()
+        .title(title)
+        .padding(Padding::new(1, 1, 1, 1))
+        .borders(Borders::ALL);
+    let area = centered_rect(60, line_count + 3, f.size());
+    f.render_widget(Clear, area); //this clears out the background
+    f.render_widget(paragraph.block(block), area);
 }
 
 pub fn initialize_panic_handler() -> Result<()> {

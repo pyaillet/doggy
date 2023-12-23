@@ -1,13 +1,8 @@
-use bollard::{container::InspectContainerOptions, Docker};
 use color_eyre::Result;
 
-use futures::executor::block_on;
 use ratatui::{
-    layout::Rect,
-    style::{Modifier, Style, Stylize},
-    text::Span,
+    prelude::*,
     widgets::{Block, Borders, Paragraph, ScrollbarState},
-    Frame,
 };
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -23,18 +18,7 @@ pub struct ContainerDetails {
 }
 
 impl ContainerDetails {
-    pub fn new(cid: String, name: String) -> Self {
-        let details = block_on(async {
-            let docker_cli =
-                Docker::connect_with_socket_defaults().expect("Unable to connect to docker");
-            let container_details = docker_cli
-                .inspect_container(&cid, Some(InspectContainerOptions { size: false }))
-                .await
-                .expect("Unable to get container description");
-            serde_json::to_string_pretty(&container_details)
-                .expect("Unable to serialize container_details")
-        });
-
+    pub fn new(cid: String, name: String, details: String) -> Self {
         ContainerDetails {
             cid,
             name,

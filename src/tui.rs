@@ -3,8 +3,6 @@ use std::{
     time::Duration,
 };
 
-use tracing::{span, Level};
-
 use color_eyre::Result;
 
 use crossterm::{
@@ -85,14 +83,11 @@ impl Tui {
                 let tick_delay = tick_interval.tick();
                 let render_delay = render_interval.tick();
                 let crossterm_event = reader.next().fuse();
-                let tui_loop_event = span!(Level::TRACE, "Tui::start::loop");
-                let tui_loop_event_guard = tui_loop_event.enter();
                 tokio::select! {
                   _ = _cancellation_token.cancelled() => {
                     break;
                   }
                   maybe_event = crossterm_event => {
-                    let crossterm_span = span!(Level::TRACE, "Tui::start::loop::crossterm_event", "{:?}", maybe_event).entered();
                     log::debug!("Crossterm event: {:?}", &maybe_event);
                     match maybe_event {
                       Some(Ok(evt)) => {
@@ -113,22 +108,14 @@ impl Tui {
                       }
                       None => {},
                     }
-                    crossterm_span.exit();
                   },
                   _ = tick_delay => {
-                      let tick_span = span!(Level::TRACE, "Tui::start::loop::tick_event").entered();
-                      tui_loop_event.record("event", "tick");
                       _event_tx.send(Event::Tick).unwrap();
-                      tick_span.exit();
                   },
                   _ = render_delay => {
-                      let delay_span = span!(Level::TRACE, "Tui::start::loop::render_event").entered();
-                      tui_loop_event.record("event", "render");
                       _event_tx.send(Event::Render).unwrap();
-                      delay_span.exit();
                   },
                 }
-                drop(tui_loop_event_guard);
             }
         });
     }

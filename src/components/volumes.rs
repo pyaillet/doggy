@@ -1,12 +1,5 @@
-use std::collections::HashMap;
-
-use bollard::service::Volume;
-use bollard::volume::{ListVolumesOptions, RemoveVolumeOptions};
 use color_eyre::Result;
 
-use humansize::{FormatSizeI, BINARY};
-
-use bollard::Docker;
 use futures::executor::block_on;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Style, Stylize};
@@ -17,6 +10,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::action::Action;
 use crate::components::Component;
+use crate::runtime::{delete_volume, list_volumes};
 use crate::utils::{centered_rect, table};
 
 const VOLUME_CONSTRAINTS: [Constraint; 4] = [
@@ -32,7 +26,6 @@ enum Popup {
 }
 
 pub struct Volumes {
-    filters: HashMap<String, Vec<String>>,
     state: TableState,
     volumes: Vec<[String; 4]>,
     show_popup: Popup,
@@ -42,7 +35,6 @@ pub struct Volumes {
 impl Volumes {
     pub fn new() -> Self {
         Volumes {
-            filters: HashMap::new(),
             state: Default::default(),
             volumes: Vec::new(),
             show_popup: Popup::None,
@@ -129,38 +121,12 @@ impl Component for Volumes {
     }
 
     fn update(&mut self, action: Action) -> Result<()> {
+        let tx = self.action_tx.clone().expect("No action sender available");
         match action {
-            Action::Tick => {
-                let options = ListVolumesOptions {
-                    filters: self.filters.clone(),
-                };
-
-                self.volumes = block_on(async {
-                    let docker_cli = Docker::connect_with_socket_defaults()
-                        .expect("Unable to connect to docker");
-                    let result = docker_cli
-                        .list_volumes(Some(options))
-                        .await
-                        .expect("Unable to list volumes");
-                    result
-                        .volumes
-                        .unwrap_or(vec![])
-                        .iter()
-                        .map(|v: &Volume| {
-                            [
-                                v.name.to_owned(),
-                                v.driver.to_owned(),
-                                v.usage_data
-                                    .to_owned()
-                                    .map(|usage| usage.size)
-                                    .map(|s| s.format_size_i(BINARY))
-                                    .unwrap_or("<Unknown>".to_owned()),
-                                v.created_at.to_owned().unwrap_or("<Unknown>".to_string()),
-                            ]
-                        })
-                        .collect()
-                });
-            }
+            Action::Tick => match block_on(list_volumes()) {
+                Ok(volumes) => self.volumes = volumes,
+                Err(e) => tx.send(Action::Error(format!("Error listing volumes:\n{}", e)))?,
+            },
             Action::Down => {
                 self.next();
             }
@@ -174,11 +140,14 @@ impl Component for Volumes {
             }
             Action::Ok => {
                 if let Popup::Delete(id) = &self.show_popup {
-                    delete_volume(id)?;
-                    self.show_popup = Popup::None;
-                    if let Some(tx) = self.action_tx.clone() {
-                        tx.send(Action::Tick)?;
+                    if let Err(e) = block_on(delete_volume(id)) {
+                        tx.send(Action::Error(format!(
+                            "Error deleting volume \"{}\":\n{}",
+                            id, e
+                        )))?;
                     }
+                    self.show_popup = Popup::None;
+                    tx.send(Action::Tick)?;
                 }
             }
             Action::PreviousScreen => {
@@ -203,15 +172,4 @@ impl Component for Volumes {
 
         self.draw_popup(f);
     }
-}
-
-fn delete_volume(id: &str) -> Result<()> {
-    let options = RemoveVolumeOptions { force: true };
-    block_on(async {
-        let docker_cli =
-            Docker::connect_with_socket_defaults().expect("Unable to connect to docker");
-        // TODO: Handle error correctly
-        let _ = docker_cli.remove_volume(id, Some(options)).await;
-    });
-    Ok(())
 }

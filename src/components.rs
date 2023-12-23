@@ -25,7 +25,7 @@ pub mod volumes;
 pub(crate) enum ComponentInit {
     Containers,
     ContainerExec(String, String, Option<String>),
-    ContainerInspect(String, String),
+    ContainerInspect(String, String, String),
     Images,
     Networks,
     Volumes,
@@ -35,7 +35,9 @@ impl ComponentInit {
     pub fn get_component(self) -> Box<dyn Component> {
         match self {
             ComponentInit::Containers => Box::new(Containers::new()),
-            ComponentInit::ContainerInspect(id, name) => Box::new(ContainerDetails::new(id, name)),
+            ComponentInit::ContainerInspect(id, name, details) => {
+                Box::new(ContainerDetails::new(id, name, details))
+            }
             ComponentInit::ContainerExec(id, cname, cmd) => {
                 Box::new(ContainerExec::new(id, cname, cmd))
             }

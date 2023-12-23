@@ -6,6 +6,7 @@ use utils::{initialize_logging, initialize_panic_handler, GIT_COMMIT_HASH};
 mod action;
 mod app;
 mod components;
+mod runtime;
 mod tui;
 mod utils;
 

@@ -7,10 +7,11 @@ use color_eyre::Result;
 use crossterm::cursor::{self, MoveTo};
 use crossterm::terminal::{Clear, ClearType};
 use crossterm::ExecutableCommand;
-use ratatui::prelude::*;
 
 use futures::executor::block_on;
 use futures::StreamExt;
+use ratatui::layout::Rect;
+use ratatui::Frame;
 use tokio::io::{stdin, AsyncReadExt, AsyncWriteExt};
 use tokio::select;
 use tokio::sync::mpsc::UnboundedSender;
@@ -42,11 +43,10 @@ impl ContainerExec {
     }
 
     async fn exec(&mut self, mut rx: Receiver<usize>) -> Result<()> {
-        let docker = Docker::connect_with_socket_defaults()?;
-
         let tty_size = crossterm::terminal::size()?;
         let mut stdout = std::io::stdout();
 
+        let docker = Docker::connect_with_socket_defaults()?;
         let exec = docker
             .create_exec(
                 &self.cid,
