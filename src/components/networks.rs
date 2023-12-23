@@ -10,7 +10,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::action::Action;
 use crate::components::Component;
-use crate::runtime::{delete_network, list_networks};
+use crate::runtime::{delete_network, get_network, list_networks};
 use crate::utils::{centered_rect, table};
 
 const NETWORK_CONSTRAINTS: [Constraint; 4] = [
@@ -74,12 +74,14 @@ impl Networks {
         }
     }
 
-    fn get_selected_network_info(&self) -> Option<String> {
+    fn get_selected_network_info(&self) -> Option<(String, String)> {
         self.state
             .selected()
             .and_then(|i| self.networks.get(i))
-            .and_then(|n| n.first())
-            .cloned()
+            .and_then(|n| match (n.first(), n.get(1)) {
+                (Some(id), Some(name)) => Some((id.to_string(), name.to_string())),
+                _ => None,
+            })
     }
 
     fn draw_popup(&self, f: &mut Frame<'_>) {
@@ -137,8 +139,24 @@ impl Component for Networks {
             Action::Up => {
                 self.previous();
             }
+            Action::Inspect => {
+                if let Some(info) = self.get_selected_network_info() {
+                    let id = info.0.to_string();
+                    let name = info.1.to_string();
+                    let action = match block_on(get_network(&name)) {
+                        Ok(details) => {
+                            Action::Screen(super::ComponentInit::NetworkInspect(id, name, details))
+                        }
+                        Err(e) => Action::Error(format!(
+                            "Unable to get network \"{}\" details:\n{}",
+                            name, e
+                        )),
+                    };
+                    tx.send(action)?;
+                };
+            }
             Action::Delete => {
-                if let Some(id) = self.get_selected_network_info() {
+                if let Some((id, _)) = self.get_selected_network_info() {
                     self.show_popup = Popup::Delete(id);
                 }
             }

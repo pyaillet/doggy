@@ -15,7 +15,7 @@ use crate::utils::table;
 use crate::{action::Action, utils::centered_rect};
 use crate::{
     components::Component,
-    runtime::{delete_container, get_container_details, list_containers},
+    runtime::{delete_container, get_container, list_containers},
 };
 
 const CONTAINER_CONSTRAINTS: [Constraint; 4] = [
@@ -259,7 +259,7 @@ impl Component for Containers {
                 if let Some(cinfo) = self.get_selected_container_info() {
                     let cid = cinfo.0.to_string();
                     let cname = cinfo.1.to_string();
-                    let action = match block_on(get_container_details(&cid)) {
+                    let action = match block_on(get_container(&cid)) {
                         Ok(details) => Action::Screen(super::ComponentInit::ContainerInspect(
                             cid, cname, details,
                         )),
