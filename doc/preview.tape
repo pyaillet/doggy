@@ -15,6 +15,31 @@ Enter
 # Pause for dramatic effect...
 Sleep 500ms
 
+# Show exec
+Type "j"
+
+Sleep 400ms
+Ctrl+S
+Sleep 1s
+Type "/bin/sh"
+
+Sleep 300ms
+Enter
+
+Sleep 300ms
+
+Type "ls"
+Enter
+
+Sleep 300ms
+
+Type "ps"
+Enter
+
+Sleep 300ms
+Ctrl+d
+Sleep 1s
+
 # Run the command by pressing enter.
 Type "a"
 Sleep 400ms
