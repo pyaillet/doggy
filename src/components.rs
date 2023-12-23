@@ -13,6 +13,7 @@ use crate::components::image_inspect::ImageInspect;
 use crate::components::images::Images;
 use crate::components::network_inspect::NetworkInspect;
 use crate::components::networks::Networks;
+use crate::components::volume_inspect::VolumeInspect;
 use crate::components::volumes::Volumes;
 use crate::tui;
 
@@ -23,6 +24,7 @@ pub mod image_inspect;
 pub mod images;
 pub mod network_inspect;
 pub mod networks;
+pub mod volume_inspect;
 pub mod volumes;
 
 #[derive(Clone, Debug)]
@@ -35,6 +37,7 @@ pub(crate) enum ComponentInit {
     Networks,
     NetworkInspect(String, String, String),
     Volumes,
+    VolumeInspect(String, String),
 }
 
 impl ComponentInit {
@@ -56,6 +59,7 @@ impl ComponentInit {
                 Box::new(NetworkInspect::new(id, name, details))
             }
             ComponentInit::Volumes => Box::new(Volumes::new()),
+            ComponentInit::VolumeInspect(id, details) => Box::new(VolumeInspect::new(id, details)),
         }
     }
 }

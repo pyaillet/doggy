@@ -10,7 +10,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::action::Action;
 use crate::components::Component;
-use crate::runtime::{delete_volume, list_volumes};
+use crate::runtime::{delete_volume, get_volume, list_volumes};
 use crate::utils::{centered_rect, table};
 
 const VOLUME_CONSTRAINTS: [Constraint; 4] = [
@@ -78,7 +78,7 @@ impl Volumes {
         self.state
             .selected()
             .and_then(|i| self.volumes.get(i))
-            .and_then(|i| i.first())
+            .and_then(|v| v.first())
             .cloned()
     }
 
@@ -132,6 +132,22 @@ impl Component for Volumes {
             }
             Action::Up => {
                 self.previous();
+            }
+            Action::Inspect => {
+                if let Some(info) = self.get_selected_volume_info() {
+                    let id = info.to_string();
+                    let action = match block_on(get_volume(&id)) {
+                        Ok(details) => {
+                            Action::Screen(super::ComponentInit::VolumeInspect(id, details))
+                        }
+                        Err(e) => Action::Error(format!(
+                            "Unable to get network \"{}\" details:\n{}",
+                            &id[0..12],
+                            e
+                        )),
+                    };
+                    tx.send(action)?;
+                };
             }
             Action::Delete => {
                 if let Some(id) = self.get_selected_volume_info() {
