@@ -11,7 +11,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::action::Action;
 use crate::components::Component;
 use crate::runtime::{delete_image, get_image, list_images};
-use crate::utils::{centered_rect, table};
+use crate::utils::{centered_rect, table, COMMON_LIST_BINDINGS};
 
 const IMAGE_CONSTRAINTS: [Constraint; 4] = [
     Constraint::Max(15),
@@ -235,5 +235,9 @@ impl Component for Images {
         f.render_stateful_widget(t, rects[0], &mut self.state);
 
         self.draw_popup(f);
+    }
+
+    fn get_bindings(&self) -> Option<&[(&str, &str)]> {
+        Some(&COMMON_LIST_BINDINGS)
     }
 }

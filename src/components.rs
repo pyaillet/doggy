@@ -93,4 +93,8 @@ pub(crate) trait Component {
     fn handle_input(&mut self, _kevent: event::KeyEvent) -> Result<()> {
         Ok(())
     }
+
+    fn get_bindings(&self) -> Option<&[(&str, &str)]> {
+        None
+    }
 }

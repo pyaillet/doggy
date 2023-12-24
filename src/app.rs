@@ -8,7 +8,7 @@ use crate::action::Action;
 use crate::components::containers::Containers;
 use crate::components::{Component, ComponentInit};
 use crate::tui;
-use crate::utils::toast;
+use crate::utils::{default_layout, help_screen, toast};
 
 enum InputMode {
     None,
@@ -31,6 +31,7 @@ pub enum Popup {
         timeout: usize,
         ttl: usize,
     },
+    Help,
 }
 
 pub struct App {
@@ -103,39 +104,10 @@ impl App {
                     Action::Resize(w, h) => {
                         tui.resize(Rect::new(0, 0, w, h))?;
 
-                        let main_layout = Layout::default()
-                            .direction(Direction::Vertical)
-                            .constraints([
-                                Constraint::Max(3),
-                                Constraint::Min(5),
-                                Constraint::Max(1),
-                            ])
-                            .split(tui.get_frame().size());
-                        tui.draw(|f| {
-                            self.draw_header(f, main_layout[0]);
-                            main.draw(f, main_layout[1]);
-                            self.draw_popup(f);
-                            self.draw_status(f, main_layout[2]);
-                        })?;
+                        self.draw(&mut tui, &mut main)?;
                     }
                     Action::Render => {
-                        let main_layout = Layout::default()
-                            .direction(Direction::Vertical)
-                            .constraints([
-                                Constraint::Max(3),
-                                Constraint::Min(5),
-                                Constraint::Max(1),
-                            ])
-                            .split(tui.get_frame().size());
-                        log::debug!("{:?}", main_layout);
-
-                        log::debug!("Drawing component: {}", main.get_name());
-                        tui.draw(|f| {
-                            self.draw_header(f, main_layout[0]);
-                            main.draw(f, main_layout[1]);
-                            self.draw_popup(f);
-                            self.draw_status(f, main_layout[2]);
-                        })?;
+                        self.draw(&mut tui, &mut main)?;
                     }
                     Action::Tick => {
                         if let Popup::Error { ttl, .. } = &mut self.show_popup {
@@ -156,12 +128,18 @@ impl App {
                     Action::Change => {
                         self.input_mode = InputMode::Change;
                     }
+                    Action::Help => {
+                        self.show_popup = Popup::Help;
+                    }
                     Action::PreviousScreen => {
                         if let InputMode::Change = self.input_mode {
                             self.reset_input();
                         }
-                        if let Popup::Error { .. } = self.show_popup {
-                            self.show_popup = Popup::None;
+                        match self.show_popup {
+                            Popup::Error { .. } | Popup::Help => {
+                                self.show_popup = Popup::None;
+                            }
+                            Popup::None => {}
                         }
                     }
                     Action::Error(ref msg) => {
@@ -193,6 +171,21 @@ impl App {
             }
         }
         tui.exit()?;
+        Ok(())
+    }
+
+    fn draw(
+        &mut self,
+        tui: &mut tui::Tui,
+        main_component: &mut Box<dyn Component>,
+    ) -> Result<(), color_eyre::eyre::Error> {
+        let main_layout = default_layout(tui.get_frame().size());
+        tui.draw(|f| {
+            self.draw_header(f, main_layout[0]);
+            main_component.draw(f, main_layout[1]);
+            self.draw_popup(f, main_component.as_ref());
+            self.draw_status(f, main_layout[2]);
+        })?;
         Ok(())
     }
 
@@ -366,6 +359,7 @@ impl App {
             KeyCode::Char('k') | KeyCode::Up => action_tx.send(Action::Up)?,
             KeyCode::Char('h') | KeyCode::Left => action_tx.send(Action::Left)?,
             KeyCode::Char('l') | KeyCode::Right => action_tx.send(Action::Right)?,
+            KeyCode::Char('?') => action_tx.send(Action::Help)?,
             KeyCode::F(n) => action_tx.send(Action::SortColumn(n))?,
             KeyCode::PageUp => action_tx.send(Action::PageUp)?,
             KeyCode::PageDown => action_tx.send(Action::PageDown)?,
@@ -381,10 +375,16 @@ impl App {
         Ok(())
     }
 
-    fn draw_popup(&mut self, f: &mut Frame<'_>) {
-        if let Popup::Error { msg, timeout, ttl } = &mut self.show_popup {
-            let title = Span::styled("Error", Style::new().red());
-            toast(f, title, msg, *timeout, *ttl);
+    fn draw_popup(&mut self, f: &mut Frame<'_>, main_component: &(impl Component + ?Sized)) {
+        match &mut self.show_popup {
+            Popup::Error { msg, timeout, ttl } => {
+                let title = Span::styled("Error", Style::new().red());
+                toast(f, title, msg, *timeout, *ttl);
+            }
+            Popup::Help => {
+                help_screen(f, main_component);
+            }
+            Popup::None => {}
         }
     }
 }

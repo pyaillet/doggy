@@ -28,6 +28,7 @@ pub(crate) enum Action {
     Suspend,
     CustomShell,
     SortColumn(u8),
+    Help,
 }
 
 impl Display for Action {
