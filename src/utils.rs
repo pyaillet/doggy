@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, rc::Rc};
 
 use color_eyre::Result;
 
@@ -31,6 +31,23 @@ lazy_static! {
     pub static ref LOG_FILE: String = format!("{}.log", env!("CARGO_PKG_NAME"));
 }
 
+const GENERAL_BINDINGS: [(&str, &str); 4] = [
+    ("q", "Quit"),
+    (":", "Change resource"),
+    ("?", "Help"),
+    ("ESC", "Cancel/Previous screen"),
+];
+
+const NAVIGATION_BINDINGS: [(&str, &str); 4] = [
+    ("j", "Down"),
+    ("k", "Up"),
+    ("PageUp", "Page up"),
+    ("PageDown", "Page down"),
+];
+
+pub(crate) const COMMON_LIST_BINDINGS: [(&str, &str); 2] =
+    [("ctrl+d", "Delete"), ("i", "Inspect/View details")];
+
 fn project_directory() -> Option<ProjectDirs> {
     ProjectDirs::from("org", "pyaillet", env!("CARGO_PKG_NAME"))
 }
@@ -58,6 +75,8 @@ use tracing::error;
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
+use crate::components::Component;
+
 pub(crate) fn table<'a, const SIZE: usize>(
     title: String,
     headers: [&'a str; SIZE],
@@ -82,6 +101,13 @@ pub(crate) fn table<'a, const SIZE: usize>(
         .header(header)
         .block(Block::default().borders(Borders::ALL).title(title))
         .highlight_style(selected_style)
+}
+
+pub fn default_layout(size: Rect) -> Rc<[Rect]> {
+    Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Max(3), Constraint::Min(5), Constraint::Max(1)])
+        .split(size)
 }
 
 pub fn centered_rect(size_x: u16, size_y: u16, r: Rect) -> Rect {
@@ -154,6 +180,60 @@ where
     f.render_widget(Clear, area); //this clears out the background
     f.render_widget(paragraph.block(block), area);
     f.render_widget(lg, pg_area);
+}
+
+pub fn help_screen(f: &mut Frame<'_>, component: &(impl Component + ?Sized)) {
+    let area = default_layout(f.size())[1];
+
+    let block = Block::default()
+        .title("Help")
+        .padding(Padding::new(1, 1, 1, 1))
+        .borders(Borders::ALL);
+
+    let columns = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(33),
+            Constraint::Percentage(33),
+            Constraint::Percentage(33),
+        ])
+        .split(area);
+
+    let column_block = Block::default()
+        .padding(Padding::new(1, 1, 1, 1))
+        .borders(Borders::NONE);
+
+    f.render_widget(Clear, area); //this clears out the background
+    f.render_widget(block, area);
+
+    if let Some(bindings) = component.get_bindings() {
+        let resource = binding_to_help(bindings, component.get_name());
+        f.render_widget(resource.block(column_block.clone()), columns[0]);
+    }
+
+    let general = binding_to_help(&GENERAL_BINDINGS, "General");
+    f.render_widget(general.block(column_block.clone()), columns[1]);
+
+    let navigation = binding_to_help(&NAVIGATION_BINDINGS, "Navigation");
+    f.render_widget(navigation.block(column_block), columns[2]);
+}
+
+fn binding_to_help<'a, 'b, T>(bindings: T, title: &'static str) -> Paragraph<'a>
+where
+    T: IntoIterator<Item = &'b (&'b str, &'b str)>,
+    'b: 'a,
+{
+    let title = vec![Line::from(title.bold()), Line::from("")];
+
+    let texts: Vec<Line<'a>> = title
+        .into_iter()
+        .chain(
+            bindings
+                .into_iter()
+                .map(|(k, a)| Line::from(format!("{: <10} : {}", format!("<{}>", k), a))),
+        )
+        .collect();
+    Paragraph::new(texts)
 }
 
 pub fn initialize_panic_handler() -> Result<()> {

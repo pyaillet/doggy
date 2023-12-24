@@ -409,4 +409,13 @@ impl Component for Containers {
         }
         Ok(())
     }
+
+    fn get_bindings(&self) -> Option<&[(&str, &str)]> {
+        Some(&[
+            ("ctrl+d", "Delete"),
+            ("i", "Inspect"),
+            ("s", "Execute '/bin/bash' in container"),
+            ("S", "Execute custom command"),
+        ])
+    }
 }

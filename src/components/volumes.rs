@@ -11,7 +11,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::action::Action;
 use crate::components::Component;
 use crate::runtime::{delete_volume, get_volume, list_volumes};
-use crate::utils::{centered_rect, table};
+use crate::utils::{centered_rect, table, COMMON_LIST_BINDINGS};
 
 const VOLUME_CONSTRAINTS: [Constraint; 4] = [
     Constraint::Max(15),
@@ -234,5 +234,9 @@ impl Component for Volumes {
         f.render_stateful_widget(t, rects[0], &mut self.state);
 
         self.draw_popup(f);
+    }
+
+    fn get_bindings(&self) -> Option<&[(&str, &str)]> {
+        Some(&COMMON_LIST_BINDINGS)
     }
 }
