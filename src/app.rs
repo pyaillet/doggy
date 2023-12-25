@@ -86,7 +86,7 @@ impl App {
                         }
                         InputMode::None => {
                             main.handle_input(kevent)?;
-                            self.handle_key(kevent, action_tx.clone())?;
+                            self.handle_key(main.as_ref(), kevent, action_tx.clone())?;
                         }
                     },
                     _ => {}
@@ -342,6 +342,7 @@ impl App {
 
     fn handle_key(
         &self,
+        main: &(impl Component + ?Sized),
         kevent: event::KeyEvent,
         action_tx: UnboundedSender<Action>,
     ) -> Result<()> {
@@ -353,12 +354,15 @@ impl App {
             KeyCode::Char('q') => action_tx.send(Action::Quit)?,
             KeyCode::Char(':') => action_tx.send(Action::Change)?,
             KeyCode::Char('i') => action_tx.send(Action::Inspect)?,
-            KeyCode::Char('s') => action_tx.send(Action::Shell)?,
+            KeyCode::Char('s') => {
+                if let Some(action) = main.get_action(&kevent) {
+                    action_tx.send(action)?;
+                }
+            }
             KeyCode::Char('S') => action_tx.send(Action::CustomShell)?,
             KeyCode::Char('j') | KeyCode::Down => action_tx.send(Action::Down)?,
             KeyCode::Char('k') | KeyCode::Up => action_tx.send(Action::Up)?,
-            KeyCode::Char('h') | KeyCode::Left => action_tx.send(Action::Left)?,
-            KeyCode::Char('l') | KeyCode::Right => action_tx.send(Action::Right)?,
+            KeyCode::Char('l') => action_tx.send(Action::Logs)?,
             KeyCode::Char('?') => action_tx.send(Action::Help)?,
             KeyCode::F(n) => action_tx.send(Action::SortColumn(n))?,
             KeyCode::PageUp => action_tx.send(Action::PageUp)?,

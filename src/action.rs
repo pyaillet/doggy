@@ -6,13 +6,12 @@ use crate::components::ComponentInit;
 pub(crate) enum Action {
     Down,
     Up,
-    Right,
-    Left,
     PageUp,
     PageDown,
     Quit,
     All,
     Inspect,
+    Logs,
     Shell,
     Delete,
     Screen(ComponentInit),
@@ -29,6 +28,8 @@ pub(crate) enum Action {
     CustomShell,
     SortColumn(u8),
     Help,
+    AutoScroll,
+    Since(u16),
 }
 
 impl Display for Action {

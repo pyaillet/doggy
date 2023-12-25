@@ -1,4 +1,4 @@
-use crossterm::event;
+use crossterm::event::{self, KeyEvent};
 use ratatui::{layout::Rect, Frame};
 
 use color_eyre::Result;
@@ -17,8 +17,11 @@ use crate::components::volume_inspect::VolumeInspect;
 use crate::components::volumes::Volumes;
 use crate::tui;
 
+use self::container_logs::ContainerLogs;
+
 pub mod container_exec;
 pub mod container_inspect;
+pub mod container_logs;
 pub mod containers;
 pub mod image_inspect;
 pub mod images;
@@ -32,6 +35,7 @@ pub(crate) enum ComponentInit {
     Containers,
     ContainerExec(String, String, Option<String>),
     ContainerInspect(String, String, String),
+    ContainerLogs(String, String),
     Images,
     ImageInspect(String, String, String),
     Networks,
@@ -44,12 +48,13 @@ impl ComponentInit {
     pub fn get_component(self) -> Box<dyn Component> {
         match self {
             ComponentInit::Containers => Box::new(Containers::new()),
-            ComponentInit::ContainerInspect(id, name, details) => {
-                Box::new(ContainerDetails::new(id, name, details))
-            }
             ComponentInit::ContainerExec(id, cname, cmd) => {
                 Box::new(ContainerExec::new(id, cname, cmd))
             }
+            ComponentInit::ContainerInspect(id, name, details) => {
+                Box::new(ContainerDetails::new(id, name, details))
+            }
+            ComponentInit::ContainerLogs(id, name) => Box::new(ContainerLogs::new(id, name)),
             ComponentInit::Images => Box::new(Images::new()),
             ComponentInit::ImageInspect(id, name, details) => {
                 Box::new(ImageInspect::new(id, name, details))
@@ -95,6 +100,10 @@ pub(crate) trait Component {
     }
 
     fn get_bindings(&self) -> Option<&[(&str, &str)]> {
+        None
+    }
+
+    fn get_action(&self, _k: &KeyEvent) -> Option<Action> {
         None
     }
 }
