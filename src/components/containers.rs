@@ -11,12 +11,12 @@ use ratatui::{
 };
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::utils::table;
 use crate::{action::Action, utils::centered_rect};
 use crate::{
     components::Component,
     runtime::{delete_container, get_container, list_containers},
 };
+use crate::{runtime::ContainerSummary, utils::table};
 
 use super::ComponentInit;
 
@@ -69,7 +69,7 @@ pub enum SortColumn {
 pub struct Containers {
     all: bool,
     state: TableState,
-    containers: Vec<[String; 4]>,
+    containers: Vec<ContainerSummary>,
     show_popup: Popup,
     action_tx: Option<UnboundedSender<Action>>,
     sort_by: SortColumn,
@@ -122,11 +122,8 @@ impl Containers {
     fn get_selected_container_info(&self) -> Option<(String, String)> {
         self.state
             .selected()
-            .and_then(|i| self.containers.get(i))
-            .and_then(|c| {
-                c.first()
-                    .and_then(|cid| c.get(1).map(|cname| (cid.to_owned(), cname.to_owned())))
-            })
+            .and_then(|i| self.containers.get(i).cloned())
+            .map(|c| (c.id, c.name))
     }
 
     fn draw_popup(&self, f: &mut Frame<'_>) {
@@ -238,15 +235,15 @@ impl Containers {
 
     fn sort(&mut self) {
         self.containers.sort_by(|a, b| {
-            let (idx, o) = match &self.sort_by {
-                SortColumn::Id(o) => (0, o),
-                SortColumn::Name(o) => (1, o),
-                SortColumn::Image(o) => (2, o),
-                SortColumn::Status(o) => (3, o),
+            let (cmp_result, o) = match &self.sort_by {
+                SortColumn::Id(o) => (a.id.cmp(&b.id), o),
+                SortColumn::Name(o) => (a.name.cmp(&b.name), o),
+                SortColumn::Image(o) => (a.image.cmp(&b.image), o),
+                SortColumn::Status(o) => (a.status.cmp(&b.status), o),
             };
             match o {
-                SortOrder::Asc => a[idx].cmp(&b[idx]),
-                SortOrder::Desc => b[idx].cmp(&a[idx]),
+                SortOrder::Asc => cmp_result,
+                SortOrder::Desc => cmp_result.reverse(),
             }
         });
     }
@@ -385,7 +382,10 @@ impl Component for Containers {
                 if self.all { "All" } else { "Running" }
             ),
             ["Id", "Name", "Image", "Status"],
-            self.containers.clone(),
+            self.containers
+                .iter()
+                .map(|c| (*c).clone().into())
+                .collect(),
             &CONTAINER_CONSTRAINTS,
         );
         f.render_stateful_widget(t, rects[0], &mut self.state);
