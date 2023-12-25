@@ -1,5 +1,8 @@
 use bollard::{
-    container::{InspectContainerOptions, ListContainersOptions, RemoveContainerOptions},
+    container::{
+        InspectContainerOptions, ListContainersOptions, LogOutput, LogsOptions,
+        RemoveContainerOptions,
+    },
     image::{ListImagesOptions, RemoveImageOptions},
     network::{InspectNetworkOptions, ListNetworksOptions},
     service::{ImageSummary, Network, Volume},
@@ -8,7 +11,9 @@ use bollard::{
 };
 use chrono::{DateTime, Utc};
 use color_eyre::Result;
+use futures::{Stream, StreamExt};
 use humansize::{FormatSizeI, BINARY};
+
 use tracing::instrument;
 
 use crate::utils::get_or_not_found;
@@ -167,4 +172,16 @@ pub(crate) async fn get_container(cid: &str) -> Result<String> {
         .inspect_container(cid, Some(InspectContainerOptions { size: false }))
         .await?;
     Ok(serde_json::to_string_pretty(&container_details)?)
+}
+
+pub(crate) fn get_container_logs(
+    cid: &str,
+    options: LogsOptions<String>,
+) -> Result<impl Stream<Item = Result<LogOutput>>> {
+    let docker_cli = Docker::connect_with_socket_defaults()?;
+    let stream = docker_cli.logs(cid, Some(options));
+    Ok(stream.map(|item| match item {
+        Err(e) => Err(color_eyre::Report::from(e)),
+        Ok(other) => Ok(other),
+    }))
 }

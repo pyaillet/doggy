@@ -86,7 +86,7 @@ impl App {
                         }
                         InputMode::None => {
                             main.handle_input(kevent)?;
-                            self.handle_key(kevent, action_tx.clone())?;
+                            self.handle_key(main.as_ref(), kevent, action_tx.clone())?;
                         }
                     },
                     _ => {}
@@ -342,36 +342,38 @@ impl App {
 
     fn handle_key(
         &self,
+        main: &(impl Component + ?Sized),
         kevent: event::KeyEvent,
         action_tx: UnboundedSender<Action>,
     ) -> Result<()> {
-        match kevent.code {
-            KeyCode::Char('a') => {
-                action_tx.send(Action::All)?;
-                action_tx.send(Action::Tick)?;
-            }
-            KeyCode::Char('q') => action_tx.send(Action::Quit)?,
-            KeyCode::Char(':') => action_tx.send(Action::Change)?,
-            KeyCode::Char('i') => action_tx.send(Action::Inspect)?,
-            KeyCode::Char('s') => action_tx.send(Action::Shell)?,
-            KeyCode::Char('S') => action_tx.send(Action::CustomShell)?,
-            KeyCode::Char('j') | KeyCode::Down => action_tx.send(Action::Down)?,
-            KeyCode::Char('k') | KeyCode::Up => action_tx.send(Action::Up)?,
-            KeyCode::Char('h') | KeyCode::Left => action_tx.send(Action::Left)?,
-            KeyCode::Char('l') | KeyCode::Right => action_tx.send(Action::Right)?,
-            KeyCode::Char('?') => action_tx.send(Action::Help)?,
-            KeyCode::F(n) => action_tx.send(Action::SortColumn(n))?,
-            KeyCode::PageUp => action_tx.send(Action::PageUp)?,
-            KeyCode::PageDown => action_tx.send(Action::PageDown)?,
-            KeyCode::Esc => action_tx.send(Action::PreviousScreen)?,
-            KeyCode::Enter => action_tx.send(Action::Ok)?,
-            KeyCode::Char('d') => {
-                if let KeyModifiers::CONTROL = kevent.modifiers {
-                    action_tx.send(Action::Delete)?;
+        let action = match main.get_action(&kevent) {
+            None => match kevent.code {
+                KeyCode::Char('a') => Some(Action::All),
+                KeyCode::Char('q') => Some(Action::Quit),
+                KeyCode::Char(':') => Some(Action::Change),
+                KeyCode::Char('j') | KeyCode::Down => Some(Action::Down),
+                KeyCode::Char('k') | KeyCode::Up => Some(Action::Up),
+                KeyCode::Char('?') => Some(Action::Help),
+                KeyCode::F(n) => Some(Action::SortColumn(n)),
+                KeyCode::PageUp => Some(Action::PageUp),
+                KeyCode::PageDown => Some(Action::PageDown),
+                KeyCode::Esc => Some(Action::PreviousScreen),
+                KeyCode::Enter => Some(Action::Ok),
+                KeyCode::Char('d') => {
+                    if let KeyModifiers::CONTROL = kevent.modifiers {
+                        Some(Action::Delete)
+                    } else {
+                        None
+                    }
                 }
-            }
-            _ => {}
+                _ => None,
+            },
+            Some(action) => Some(action),
+        };
+        if let Some(action) = action {
+            action_tx.send(action)?;
         }
+
         Ok(())
     }
 

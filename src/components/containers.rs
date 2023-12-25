@@ -18,6 +18,8 @@ use crate::{
     runtime::{delete_container, get_container, list_containers},
 };
 
+use super::ComponentInit;
+
 const CONTAINER_CONSTRAINTS: [Constraint; 4] = [
     Constraint::Min(14),
     Constraint::Max(30),
@@ -292,9 +294,9 @@ impl Component for Containers {
                     let cid = cinfo.0.to_string();
                     let cname = cinfo.1.to_string();
                     let action = match block_on(get_container(&cid)) {
-                        Ok(details) => Action::Screen(super::ComponentInit::ContainerInspect(
-                            cid, cname, details,
-                        )),
+                        Ok(details) => {
+                            Action::Screen(ComponentInit::ContainerInspect(cid, cname, details))
+                        }
                         Err(e) => Action::Error(format!(
                             "Unable to get container \"{}\" details:\n{}",
                             cname, e
@@ -303,9 +305,16 @@ impl Component for Containers {
                     tx.send(action)?;
                 };
             }
+            (Action::Logs, Popup::None) => {
+                if let Some(cinfo) = self.get_selected_container_info() {
+                    let cid = cinfo.0.to_string();
+                    let cname = cinfo.1.to_string();
+                    tx.send(Action::Screen(ComponentInit::ContainerLogs(cid, cname)))?;
+                }
+            }
             (Action::Shell, Popup::None) => {
                 if let Some(action) = self.get_selected_container_info().map(|cinfo| {
-                    Action::Screen(super::ComponentInit::ContainerExec(cinfo.0, cinfo.1, None))
+                    Action::Screen(ComponentInit::ContainerExec(cinfo.0, cinfo.1, None))
                 }) {
                     tx.send(Action::Suspend)?;
                     tx.send(action)?;
@@ -335,7 +344,7 @@ impl Component for Containers {
                 });
             }
             (Action::Ok, Popup::Shell(shell)) => {
-                let action = Action::Screen(super::ComponentInit::ContainerExec(
+                let action = Action::Screen(ComponentInit::ContainerExec(
                     shell.cid,
                     shell.cname,
                     Some(shell.input),
@@ -414,8 +423,19 @@ impl Component for Containers {
         Some(&[
             ("ctrl+d", "Delete"),
             ("i", "Inspect"),
+            ("l", "Logs"),
             ("s", "Execute '/bin/bash' in container"),
             ("S", "Execute custom command"),
         ])
+    }
+
+    fn get_action(&self, k: &event::KeyEvent) -> Option<Action> {
+        match k.code {
+            KeyCode::Char('i') => Some(Action::Inspect),
+            KeyCode::Char('l') => Some(Action::Logs),
+            KeyCode::Char('s') => Some(Action::Shell),
+            KeyCode::Char('S') => Some(Action::CustomShell),
+            _ => None,
+        }
     }
 }
