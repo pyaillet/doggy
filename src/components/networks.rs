@@ -11,7 +11,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::action::Action;
 use crate::components::Component;
 use crate::runtime::{delete_network, get_network, list_networks};
-use crate::utils::{centered_rect, table, COMMON_LIST_BINDINGS};
+use crate::utils::{centered_rect, table};
 
 const NETWORK_CONSTRAINTS: [Constraint; 4] = [
     Constraint::Max(15),
@@ -243,6 +243,13 @@ impl Component for Networks {
     }
 
     fn get_bindings(&self) -> Option<&[(&str, &str)]> {
-        Some(&COMMON_LIST_BINDINGS)
+        Some(&[
+            ("ctrl+d", "Delete"),
+            ("i", "Inspect/View details"),
+            ("F1", "Sort by network id"),
+            ("F2", "Sort by network name"),
+            ("F3", "Sort by network driver"),
+            ("F4", "Sort by image age"),
+        ])
     }
 }

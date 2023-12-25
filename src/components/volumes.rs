@@ -11,7 +11,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::action::Action;
 use crate::components::Component;
 use crate::runtime::{delete_volume, get_volume, list_volumes};
-use crate::utils::{centered_rect, table, COMMON_LIST_BINDINGS};
+use crate::utils::{centered_rect, table};
 
 const VOLUME_CONSTRAINTS: [Constraint; 4] = [
     Constraint::Max(15),
@@ -237,6 +237,13 @@ impl Component for Volumes {
     }
 
     fn get_bindings(&self) -> Option<&[(&str, &str)]> {
-        Some(&COMMON_LIST_BINDINGS)
+        Some(&[
+            ("ctrl+d", "Delete"),
+            ("i", "Inspect/View details"),
+            ("F1", "Sort by volume id"),
+            ("F2", "Sort by volume driver"),
+            ("F3", "Sort by volume size"),
+            ("F4", "Sort by volume age"),
+        ])
     }
 }
