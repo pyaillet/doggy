@@ -45,9 +45,6 @@ const NAVIGATION_BINDINGS: [(&str, &str); 4] = [
     ("PageDown", "Page down"),
 ];
 
-pub(crate) const COMMON_LIST_BINDINGS: [(&str, &str); 2] =
-    [("ctrl+d", "Delete"), ("i", "Inspect/View details")];
-
 fn project_directory() -> Option<ProjectDirs> {
     ProjectDirs::from("org", "pyaillet", env!("CARGO_PKG_NAME"))
 }

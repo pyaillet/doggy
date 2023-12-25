@@ -426,6 +426,10 @@ impl Component for Containers {
             ("l", "Logs"),
             ("s", "Execute '/bin/bash' in container"),
             ("S", "Execute custom command"),
+            ("F1", "Sort by container id"),
+            ("F2", "Sort by container name"),
+            ("F3", "Sort by image name"),
+            ("F4", "Sort by status"),
         ])
     }
 

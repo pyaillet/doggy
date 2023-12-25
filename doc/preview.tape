@@ -9,6 +9,7 @@ Set TypingSpeed 100ms
 
 # Type a command in the terminal.
 Type "./target/release/doggy"
+# Type "./target/x86_64-unknown-linux-gnu/release/doggy"
 
 Enter
 
@@ -49,10 +50,10 @@ Type "j"
 Sleep 200ms
 Type "j"
 Sleep 200ms
-Ctrl+d
-Sleep 1s
-Enter
-Sleep 2s
+#Ctrl+d
+#Sleep 1s
+#Enter
+#Sleep 2s
 Type "i"
 Sleep 1s
 PageDown

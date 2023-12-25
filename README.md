@@ -25,10 +25,14 @@ You can download one of the binary from the release page
 
 ## Usage
 
+- Display help screen: `?`
 - Change view: `:` and resource name (`containers`, `images`, `networks`, `volumes`)
-- Show/hide stopped containers: `a`
-- Launch `/bin/bash` in the container: `s`
-- Launch a custom command in the container: `S`
+- Container view:
+  - Show/hide stopped containers: `a`
+  - Launch `/bin/bash` in the container: `s`
+  - Launch a custom command in the container: `S`
+  - Show container logs: `l`
+- Sort by columns: `F[1234]`
 - Inspect resource: `i` 
 - Delete a resource: `Ctrl+d`
 - Browse lists:
@@ -42,6 +46,7 @@ You can download one of the binary from the release page
 - [x] Display the stopped containers
 - [ ] Filter the container list
 - [x] Inspect containers
+- [x] View container logs
 - [x] Exec `/bin/bash` in a container
 - [x] Delete containers (running or stopped)
 - [x] List images
