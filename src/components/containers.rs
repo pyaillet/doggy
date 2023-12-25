@@ -431,9 +431,10 @@ impl Component for Containers {
 
     fn get_action(&self, k: &event::KeyEvent) -> Option<Action> {
         match k.code {
+            KeyCode::Char('i') => Some(Action::Inspect),
+            KeyCode::Char('l') => Some(Action::Logs),
             KeyCode::Char('s') => Some(Action::Shell),
             KeyCode::Char('S') => Some(Action::CustomShell),
-            KeyCode::Char('l') => Some(Action::Logs),
             _ => None,
         }
     }

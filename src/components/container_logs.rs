@@ -153,15 +153,14 @@ impl Component for ContainerLogs {
                 self.down(15);
             }
             Action::Since(n) => {
+                log::debug!("****** Since {}", n);
                 self.cancel()?;
                 block_on(self.logs.lock()).clear();
 
                 let cancel = CancellationToken::new();
                 let _cancel = cancel.clone();
 
-                let logs = Arc::new(Mutex::new(Vec::new()));
-
-                let _logs = Arc::clone(&logs);
+                let _logs = Arc::clone(&self.logs);
 
                 let task = spawn(run_setup_task(
                     self.id.clone(),
@@ -173,6 +172,7 @@ impl Component for ContainerLogs {
 
                 self.task = task;
                 self.cancellation_token = cancel;
+                self.since = n as i64;
             }
             Action::AutoScroll => {
                 self.auto_scroll = !self.auto_scroll;
