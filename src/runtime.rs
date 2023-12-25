@@ -1,7 +1,9 @@
+use std::fmt::Display;
+
 use bollard::{
     container::{
         InspectContainerOptions, ListContainersOptions, LogOutput, LogsOptions,
-        RemoveContainerOptions,
+        RemoveContainerOptions, StatsOptions,
     },
     image::{ListImagesOptions, RemoveImageOptions},
     network::{InspectNetworkOptions, ListNetworksOptions},
@@ -214,6 +216,24 @@ pub struct ContainerSummary {
     pub image: String,
     pub status: String,
     pub age: i64,
+    pub cpu_usage: String,
+    pub mem_usage: String,
+}
+
+impl From<ContainerSummary> for [String; 6] {
+    fn from(value: ContainerSummary) -> Self {
+        let ContainerSummary {
+            id,
+            name,
+            image,
+            status,
+            cpu_usage,
+            mem_usage,
+            ..
+        } = value.clone();
+        [id, name, image, status, cpu_usage, mem_usage]
+
+    }
 }
 
 impl From<ContainerSummary> for [String; 4] {
@@ -248,6 +268,8 @@ pub(crate) async fn list_containers(all: bool) -> Result<Vec<ContainerSummary>> 
             image: get_or_not_found!(c.image, |i| i.split('@').next()),
             status: get_or_not_found!(c.state),
             age: c.created.unwrap_or_default(),
+            cpu_usage: "<None>".to_string(),
+            mem_usage: "<None>".to_string()
         })
         .collect();
     Ok(containers)
@@ -271,4 +293,31 @@ pub(crate) fn get_container_logs(
         Err(e) => Err(color_eyre::Report::from(e)),
         Ok(other) => Ok(other),
     }))
+}
+
+pub(crate) async fn get_container_stats(cid: &str) -> Result<[String; 2]> {
+    #[derive(Debug)]
+    struct NoStats {}
+    impl Display for NoStats {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str("No stats")
+        }
+    }
+    impl std::error::Error for NoStats {}
+
+    let options = StatsOptions {
+        stream: false,
+        ..Default::default()
+    };
+
+    let docker_cli = Docker::connect_with_socket_defaults()?;
+    let mut stream = docker_cli.stats(cid, Some(options));
+    match stream.next().await {
+        Some(Err(e)) => Err(color_eyre::Report::from(e)),
+        Some(Ok(s)) => Ok([
+            format!("{}", s.cpu_stats.cpu_usage.total_usage),
+            format!("{}", s.memory_stats.usage.unwrap_or(0)),
+        ]),
+        None => Err(color_eyre::Report::from(NoStats {})),
+    }
 }

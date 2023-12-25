@@ -16,15 +16,18 @@ use crate::{
     components::Component,
     runtime::{delete_container, get_container, list_containers},
 };
-use crate::{runtime::ContainerSummary, utils::table};
+
+use crate::{runtime::{ContainerSummary, get_container_stats}, utils::table};
 
 use super::ComponentInit;
 
-const CONTAINER_CONSTRAINTS: [Constraint; 4] = [
+const CONTAINER_CONSTRAINTS: [Constraint; 6] = [
     Constraint::Min(14),
     Constraint::Max(30),
     Constraint::Percentage(50),
     Constraint::Min(14),
+    Constraint::Max(8),
+    Constraint::Max(14),
 ];
 
 #[derive(Clone, Debug)]
@@ -266,7 +269,18 @@ impl Component for Containers {
         match (action, self.show_popup.clone()) {
             (Action::Tick, Popup::None) => {
                 self.containers = match block_on(list_containers(self.all)) {
-                    Ok(containers) => containers,
+                    Ok(containers) => containers
+                        .iter()
+                        .map(|c| {
+                            let stats = block_on(get_container_stats(&c.id))
+                                .unwrap_or(["".to_string(), "".to_string()]);
+                            ContainerSummary {
+                                cpu_usage: stats[0].to_string(),
+                                mem_usage: stats[1].to_string(),
+                                ..c.clone()
+                            }
+                        })
+                        .collect(),
                     Err(e) => {
                         tx.send(Action::Error(format!(
                             "Error getting container list: {}",
@@ -381,7 +395,7 @@ impl Component for Containers {
                 self.get_name(),
                 if self.all { "All" } else { "Running" }
             ),
-            ["Id", "Name", "Image", "Status"],
+            ["Id", "Name", "Image", "Status", "CPU", "Mem"],
             self.containers
                 .iter()
                 .map(|c| (*c).clone().into())
