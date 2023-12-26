@@ -5,7 +5,7 @@ use bollard::{
     },
     image::{ListImagesOptions, RemoveImageOptions},
     network::{InspectNetworkOptions, ListNetworksOptions},
-    service::{ImageSummary, Network, Volume},
+    service::{Network, Volume},
     volume::{ListVolumesOptions, RemoveVolumeOptions},
     Docker,
 };
@@ -18,7 +18,27 @@ use tracing::instrument;
 
 use crate::utils::get_or_not_found;
 
-pub(crate) async fn list_volumes() -> Result<Vec<[String; 4]>> {
+#[derive(Clone, Debug)]
+pub struct VolumeSummary {
+    pub id: String,
+    pub driver: String,
+    pub size: i64,
+    pub created: String,
+}
+
+impl From<VolumeSummary> for [String; 4] {
+    fn from(value: VolumeSummary) -> Self {
+        let VolumeSummary {
+            id,
+            driver,
+            size,
+            created,
+        } = value.clone();
+        [id, driver, size.format_size_i(BINARY), created]
+    }
+}
+
+pub(crate) async fn list_volumes() -> Result<Vec<VolumeSummary>> {
     let options: ListVolumesOptions<String> = Default::default();
     let docker_cli = Docker::connect_with_socket_defaults()?;
     let result = docker_cli.list_volumes(Some(options)).await?;
@@ -26,17 +46,15 @@ pub(crate) async fn list_volumes() -> Result<Vec<[String; 4]>> {
         .volumes
         .unwrap_or(vec![])
         .iter()
-        .map(|v: &Volume| {
-            [
-                v.name.to_owned(),
-                v.driver.to_owned(),
-                v.usage_data
-                    .to_owned()
-                    .map(|usage| usage.size)
-                    .map(|s| s.format_size_i(BINARY))
-                    .unwrap_or("<Unknown>".to_owned()),
-                v.created_at.to_owned().unwrap_or("<Unknown>".to_string()),
-            ]
+        .map(|v: &Volume| VolumeSummary {
+            id: v.name.to_owned(),
+            driver: v.driver.to_owned(),
+            size: v
+                .usage_data
+                .to_owned()
+                .map(|usage| usage.size)
+                .unwrap_or_default(),
+            created: v.created_at.to_owned().unwrap_or("<Unknown>".to_string()),
         })
         .collect();
     Ok(volumes)
@@ -56,19 +74,37 @@ pub(crate) async fn delete_volume(id: &str) -> Result<()> {
     Ok(())
 }
 
-pub(crate) async fn list_networks() -> Result<Vec<[String; 4]>> {
+#[derive(Clone, Debug)]
+pub struct NetworkSummary {
+    pub id: String,
+    pub name: String,
+    pub driver: String,
+    pub created: String,
+}
+
+impl From<NetworkSummary> for [String; 4] {
+    fn from(value: NetworkSummary) -> Self {
+        let NetworkSummary {
+            id,
+            name,
+            driver,
+            created,
+        } = value.clone();
+        [id, name, driver, created]
+    }
+}
+
+pub(crate) async fn list_networks() -> Result<Vec<NetworkSummary>> {
     let options: ListNetworksOptions<String> = Default::default();
     let docker_cli = Docker::connect_with_socket_defaults()?;
     let networks = docker_cli.list_networks(Some(options)).await?;
     let networks = networks
         .iter()
-        .map(|n: &Network| {
-            [
-                n.id.to_owned().unwrap_or("<Unknown>".to_owned()),
-                n.name.to_owned().unwrap_or("<Unknown>".to_owned()),
-                n.driver.to_owned().unwrap_or("<Unknown>".to_owned()),
-                n.created.to_owned().unwrap_or("<Unknown>".to_owned()),
-            ]
+        .map(|n: &Network| NetworkSummary {
+            id: n.id.to_owned().unwrap_or("<Unknown>".to_string()),
+            name: n.name.to_owned().unwrap_or("<Unknown>".to_string()),
+            driver: n.driver.to_owned().unwrap_or("<Unknown>".to_string()),
+            created: n.created.to_owned().unwrap_or("<Unknown>".to_string()),
         })
         .collect();
     Ok(networks)
@@ -94,21 +130,51 @@ pub(crate) async fn delete_network(id: &str) -> Result<()> {
     let _ = docker_cli.remove_network(id).await;
     Ok(())
 }
-pub(crate) async fn list_images() -> Result<Vec<[String; 4]>> {
+
+#[derive(Clone, Debug)]
+pub struct ImageSummary {
+    pub id: String,
+    pub name: String,
+    pub size: i64,
+    pub created: i64,
+}
+
+impl From<ImageSummary> for [String; 4] {
+    fn from(value: ImageSummary) -> Self {
+        let ImageSummary {
+            id,
+            name,
+            size,
+            created,
+        } = value.clone();
+        [
+            id,
+            name,
+            size.format_size_i(BINARY),
+            DateTime::<Utc>::from_timestamp(created, 0)
+                .expect("Unable to parse timestamp")
+                .to_string(),
+        ]
+    }
+}
+
+pub(crate) async fn list_images() -> Result<Vec<ImageSummary>> {
     let options: ListImagesOptions<String> = Default::default();
     let docker_cli = Docker::connect_with_socket_defaults()?;
     let images = docker_cli.list_images(Some(options)).await?;
     let images = images
         .iter()
-        .map(|i: &ImageSummary| {
-            [
-                i.id.to_string().split(':').last().unwrap()[0..12].to_string(),
-                get_or_not_found!(i.repo_tags.first()),
-                i.size.format_size_i(BINARY),
-                DateTime::<Utc>::from_timestamp(i.created, 0)
-                    .expect("Unable to parse timestamp")
-                    .to_string(),
-            ]
+        .map(|i: &bollard::service::ImageSummary| ImageSummary {
+            id: i
+                .id
+                .to_string()
+                .split(':')
+                .last()
+                .unwrap_or("NOT_FOUND")
+                .to_string(),
+            name: get_or_not_found!(i.repo_tags.first()),
+            size: i.size,
+            created: i.created,
         })
         .collect();
     Ok(images)
@@ -141,8 +207,30 @@ pub(crate) async fn delete_container(cid: &str) -> Result<()> {
     Ok(())
 }
 
+#[derive(Clone, Debug)]
+pub struct ContainerSummary {
+    pub id: String,
+    pub name: String,
+    pub image: String,
+    pub status: String,
+    pub age: i64,
+}
+
+impl From<ContainerSummary> for [String; 4] {
+    fn from(val: ContainerSummary) -> Self {
+        let ContainerSummary {
+            id,
+            name,
+            image,
+            status,
+            ..
+        } = val.clone();
+        [id, name, image, status]
+    }
+}
+
 #[instrument(name = "containers::list_containers")]
-pub(crate) async fn list_containers(all: bool) -> Result<Vec<[String; 4]>> {
+pub(crate) async fn list_containers(all: bool) -> Result<Vec<ContainerSummary>> {
     let options: ListContainersOptions<String> = ListContainersOptions {
         all,
         ..Default::default()
@@ -154,13 +242,12 @@ pub(crate) async fn list_containers(all: bool) -> Result<Vec<[String; 4]>> {
         .expect("Unable to get container list");
     let containers = containers
         .iter()
-        .map(|c| {
-            [
-                get_or_not_found!(c.id),
-                get_or_not_found!(c.names, |c| c.first().and_then(|s| s.split('/').last())),
-                get_or_not_found!(c.image, |i| i.split('@').next()),
-                get_or_not_found!(c.state),
-            ]
+        .map(|c| ContainerSummary {
+            id: get_or_not_found!(c.id),
+            name: get_or_not_found!(c.names, |c| c.first().and_then(|s| s.split('/').last())),
+            image: get_or_not_found!(c.image, |i| i.split('@').next()),
+            status: get_or_not_found!(c.state),
+            age: c.created.unwrap_or_default(),
         })
         .collect();
     Ok(containers)

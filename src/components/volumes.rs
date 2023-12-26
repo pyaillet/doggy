@@ -10,7 +10,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::action::Action;
 use crate::components::Component;
-use crate::runtime::{delete_volume, get_volume, list_volumes};
+use crate::runtime::{delete_volume, get_volume, list_volumes, VolumeSummary};
 use crate::utils::{centered_rect, table};
 
 const VOLUME_CONSTRAINTS: [Constraint; 4] = [
@@ -41,7 +41,7 @@ pub enum SortColumn {
 
 pub struct Volumes {
     state: TableState,
-    volumes: Vec<[String; 4]>,
+    volumes: Vec<VolumeSummary>,
     show_popup: Popup,
     action_tx: Option<UnboundedSender<Action>>,
     sort_by: SortColumn,
@@ -94,8 +94,7 @@ impl Volumes {
         self.state
             .selected()
             .and_then(|i| self.volumes.get(i))
-            .and_then(|v| v.first())
-            .cloned()
+            .map(|v| v.id.to_string())
     }
 
     fn draw_popup(&self, f: &mut Frame<'_>) {
@@ -128,15 +127,15 @@ impl Volumes {
 
     fn sort(&mut self) {
         self.volumes.sort_by(|a, b| {
-            let (idx, o) = match &self.sort_by {
-                SortColumn::Id(o) => (0, o),
-                SortColumn::Driver(o) => (1, o),
-                SortColumn::Size(o) => (2, o),
-                SortColumn::Age(o) => (3, o),
+            let (cmp_result, o) = match &self.sort_by {
+                SortColumn::Id(o) => (a.id.cmp(&b.id), o),
+                SortColumn::Driver(o) => (a.driver.cmp(&b.driver), o),
+                SortColumn::Size(o) => (a.size.cmp(&b.size), o),
+                SortColumn::Age(o) => (a.created.cmp(&b.created), o),
             };
             match o {
-                SortOrder::Asc => a[idx].cmp(&b[idx]),
-                SortOrder::Desc => b[idx].cmp(&a[idx]),
+                SortOrder::Asc => cmp_result,
+                SortOrder::Desc => cmp_result.reverse(),
             }
         });
     }
@@ -228,7 +227,7 @@ impl Component for Volumes {
         let t = table(
             self.get_name().to_string(),
             ["Id", "Driver", "Size", "Age"],
-            self.volumes.clone(),
+            self.volumes.iter().map(|v| (*v).clone().into()).collect(),
             &VOLUME_CONSTRAINTS,
         );
         f.render_stateful_widget(t, rects[0], &mut self.state);

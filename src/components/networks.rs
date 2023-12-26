@@ -10,7 +10,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::action::Action;
 use crate::components::Component;
-use crate::runtime::{delete_network, get_network, list_networks};
+use crate::runtime::{delete_network, get_network, list_networks, NetworkSummary};
 use crate::utils::{centered_rect, table};
 
 const NETWORK_CONSTRAINTS: [Constraint; 4] = [
@@ -41,7 +41,7 @@ pub enum SortColumn {
 
 pub struct Networks {
     state: TableState,
-    networks: Vec<[String; 4]>,
+    networks: Vec<NetworkSummary>,
     show_popup: Popup,
     action_tx: Option<UnboundedSender<Action>>,
     sort_by: SortColumn,
@@ -93,11 +93,8 @@ impl Networks {
     fn get_selected_network_info(&self) -> Option<(String, String)> {
         self.state
             .selected()
-            .and_then(|i| self.networks.get(i))
-            .and_then(|n| match (n.first(), n.get(1)) {
-                (Some(id), Some(name)) => Some((id.to_string(), name.to_string())),
-                _ => None,
-            })
+            .and_then(|i| self.networks.get(i).cloned())
+            .map(|n| (n.id, n.name))
     }
 
     fn draw_popup(&self, f: &mut Frame<'_>) {
@@ -130,15 +127,15 @@ impl Networks {
 
     fn sort(&mut self) {
         self.networks.sort_by(|a, b| {
-            let (idx, o) = match &self.sort_by {
-                SortColumn::Id(o) => (0, o),
-                SortColumn::Name(o) => (1, o),
-                SortColumn::Driver(o) => (2, o),
-                SortColumn::Age(o) => (3, o),
+            let (cmp_result, o) = match &self.sort_by {
+                SortColumn::Id(o) => (a.id.cmp(&b.id), o),
+                SortColumn::Name(o) => (a.name.cmp(&b.name), o),
+                SortColumn::Driver(o) => (a.driver.cmp(&b.driver), o),
+                SortColumn::Age(o) => (a.created.cmp(&b.created), o),
             };
             match o {
-                SortOrder::Asc => a[idx].cmp(&b[idx]),
-                SortOrder::Desc => b[idx].cmp(&a[idx]),
+                SortOrder::Asc => cmp_result,
+                SortOrder::Desc => cmp_result.reverse(),
             }
         });
     }
@@ -234,7 +231,7 @@ impl Component for Networks {
         let t = table(
             self.get_name().to_string(),
             ["Id", "Name", "Driver", "Age"],
-            self.networks.clone(),
+            self.networks.iter().map(|n| (*n).clone().into()).collect(),
             &NETWORK_CONSTRAINTS,
         );
         f.render_stateful_widget(t, rects[0], &mut self.state);

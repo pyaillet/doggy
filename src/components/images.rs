@@ -10,7 +10,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::action::Action;
 use crate::components::Component;
-use crate::runtime::{delete_image, get_image, list_images};
+use crate::runtime::{delete_image, get_image, list_images, ImageSummary};
 use crate::utils::{centered_rect, table};
 
 const IMAGE_CONSTRAINTS: [Constraint; 4] = [
@@ -28,7 +28,7 @@ enum Popup {
 
 pub struct Images {
     state: TableState,
-    images: Vec<[String; 4]>,
+    images: Vec<ImageSummary>,
     show_popup: Popup,
     action_tx: Option<UnboundedSender<Action>>,
     sort_by: SortColumn,
@@ -94,11 +94,8 @@ impl Images {
     fn get_selected_image_info(&self) -> Option<(String, String)> {
         self.state
             .selected()
-            .and_then(|i| self.images.get(i))
-            .and_then(|c| {
-                c.first()
-                    .and_then(|id| c.get(1).map(|tag| (id.to_owned(), tag.to_owned())))
-            })
+            .and_then(|i| self.images.get(i).cloned())
+            .map(|c| (c.id, c.name))
     }
 
     fn draw_popup(&self, f: &mut Frame<'_>) {
@@ -131,15 +128,15 @@ impl Images {
 
     fn sort(&mut self) {
         self.images.sort_by(|a, b| {
-            let (idx, o) = match &self.sort_by {
-                SortColumn::Id(o) => (0, o),
-                SortColumn::Name(o) => (1, o),
-                SortColumn::Size(o) => (2, o),
-                SortColumn::Age(o) => (3, o),
+            let (cmp_result, o) = match &self.sort_by {
+                SortColumn::Id(o) => (a.id.cmp(&b.id), o),
+                SortColumn::Name(o) => (a.name.cmp(&b.name), o),
+                SortColumn::Size(o) => (a.size.cmp(&b.size), o),
+                SortColumn::Age(o) => (a.created.cmp(&b.created), o),
             };
             match o {
-                SortOrder::Asc => a[idx].cmp(&b[idx]),
-                SortOrder::Desc => b[idx].cmp(&a[idx]),
+                SortOrder::Asc => cmp_result,
+                SortOrder::Desc => cmp_result.reverse(),
             }
         });
     }
@@ -229,7 +226,7 @@ impl Component for Images {
         let t = table(
             self.get_name().to_string(),
             ["Id", "Name", "Size", "Age"],
-            self.images.clone(),
+            self.images.iter().map(|i| (*i).clone().into()).collect(),
             &IMAGE_CONSTRAINTS,
         );
         f.render_stateful_widget(t, rects[0], &mut self.state);
