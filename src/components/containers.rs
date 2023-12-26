@@ -17,7 +17,10 @@ use crate::{
     runtime::{delete_container, get_container, list_containers},
 };
 
-use crate::{runtime::{ContainerSummary, get_container_stats}, utils::table};
+use crate::{
+    runtime::{get_container_stats, ContainerSummary},
+    utils::table,
+};
 
 use super::ComponentInit;
 
@@ -26,8 +29,8 @@ const CONTAINER_CONSTRAINTS: [Constraint; 6] = [
     Constraint::Max(30),
     Constraint::Percentage(50),
     Constraint::Min(14),
-    Constraint::Max(8),
-    Constraint::Max(14),
+    Constraint::Max(12),
+    Constraint::Max(12),
 ];
 
 #[derive(Clone, Debug)]
@@ -272,13 +275,13 @@ impl Component for Containers {
                     Ok(containers) => containers
                         .iter()
                         .map(|c| {
-                            let stats = block_on(get_container_stats(&c.id))
-                                .unwrap_or(["".to_string(), "".to_string()]);
-                            ContainerSummary {
-                                cpu_usage: stats[0].to_string(),
-                                mem_usage: stats[1].to_string(),
-                                ..c.clone()
-                            }
+                            let stats = block_on(get_container_stats(&c.id));
+                            let mut c = c.clone();
+                            c.stats = match stats {
+                                Ok(s) => Some(s),
+                                Err(_) => None,
+                            };
+                            c
                         })
                         .collect(),
                     Err(e) => {

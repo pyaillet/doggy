@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use bollard::{
     container::{
-        InspectContainerOptions, ListContainersOptions, LogOutput, LogsOptions,
+        InspectContainerOptions, ListContainersOptions, LogOutput, LogsOptions, MemoryStats,
         RemoveContainerOptions, StatsOptions,
     },
     image::{ListImagesOptions, RemoveImageOptions},
@@ -216,8 +216,13 @@ pub struct ContainerSummary {
     pub image: String,
     pub status: String,
     pub age: i64,
-    pub cpu_usage: String,
-    pub mem_usage: String,
+    pub stats: Option<ContainerStats>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ContainerStats {
+    pub cpu_usage: f64,
+    pub mem_usage: f64,
 }
 
 impl From<ContainerSummary> for [String; 6] {
@@ -227,12 +232,17 @@ impl From<ContainerSummary> for [String; 6] {
             name,
             image,
             status,
-            cpu_usage,
-            mem_usage,
+            stats,
             ..
         } = value.clone();
+        let (cpu_usage, mem_usage) = match stats {
+            Some(ContainerStats {
+                cpu_usage,
+                mem_usage,
+            }) => (format!("{}%", cpu_usage), format!("{}%", mem_usage)),
+            None => ("<Unknown>".into(), "<Unknown>".into()),
+        };
         [id, name, image, status, cpu_usage, mem_usage]
-
     }
 }
 
@@ -268,8 +278,7 @@ pub(crate) async fn list_containers(all: bool) -> Result<Vec<ContainerSummary>> 
             image: get_or_not_found!(c.image, |i| i.split('@').next()),
             status: get_or_not_found!(c.state),
             age: c.created.unwrap_or_default(),
-            cpu_usage: "<None>".to_string(),
-            mem_usage: "<None>".to_string()
+            stats: None,
         })
         .collect();
     Ok(containers)
@@ -295,7 +304,7 @@ pub(crate) fn get_container_logs(
     }))
 }
 
-pub(crate) async fn get_container_stats(cid: &str) -> Result<[String; 2]> {
+pub(crate) async fn get_container_stats(cid: &str) -> Result<ContainerStats> {
     #[derive(Debug)]
     struct NoStats {}
     impl Display for NoStats {
@@ -307,17 +316,28 @@ pub(crate) async fn get_container_stats(cid: &str) -> Result<[String; 2]> {
 
     let options = StatsOptions {
         stream: false,
-        ..Default::default()
+        one_shot: false,
     };
 
     let docker_cli = Docker::connect_with_socket_defaults()?;
     let mut stream = docker_cli.stats(cid, Some(options));
     match stream.next().await {
         Some(Err(e)) => Err(color_eyre::Report::from(e)),
-        Some(Ok(s)) => Ok([
-            format!("{}", s.cpu_stats.cpu_usage.total_usage),
-            format!("{}", s.memory_stats.usage.unwrap_or(0)),
-        ]),
+        Some(Ok(s)) => Ok(ContainerStats {
+            mem_usage: calc_memory_usage(&s.memory_stats),
+            cpu_usage: calc_cpu_usage(&s.cpu_stats, &s.precpu_stats),
+        }),
         None => Err(color_eyre::Report::from(NoStats {})),
     }
+}
+
+fn calc_cpu_usage(
+    _cpu_stats: &bollard::container::CPUStats,
+    _precpu_stats: &bollard::container::CPUStats,
+) -> f64 {
+    0.0
+}
+
+fn calc_memory_usage(_memory_stats: &MemoryStats) -> f64 {
+    0.0
 }
