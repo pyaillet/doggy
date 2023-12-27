@@ -2,58 +2,78 @@
 Output ./doc/preview.gif
 
 # Set up a 1200x600 terminal with 46px font.
-Set FontSize 16
+Set FontSize 14
 Set Width 1200
-Set Height 600
+Set Height 800
 Set TypingSpeed 100ms
 
-# Type a command in the terminal.
-Type "./target/release/doggy"
-# Type "./target/x86_64-unknown-linux-gnu/release/doggy"
+# Launch doggy
+Type "doggy"
 
 Enter
 
-# Pause for dramatic effect...
-Sleep 500ms
+Sleep 1s
 
-# Show exec
+# -- Show help screen
+
+Type "?"
+Sleep 4s
+
+Escape
+Sleep 800ms
+
+# -- Show exec
 Type "j"
+Sleep 1s
 
-Sleep 400ms
-Ctrl+S
+Type "j"
+Sleep 1s
+
+Type "S"
 Sleep 1s
 Type "/bin/sh"
 
-Sleep 300ms
+Sleep 800ms
 Enter
 
-Sleep 300ms
+Sleep 1s
 
 Type "ls"
 Enter
 
-Sleep 300ms
+Sleep 2s
 
 Type "ps"
 Enter
 
-Sleep 300ms
+Sleep 3s
 Ctrl+d
 Sleep 1s
 
-# Run the command by pressing enter.
+# -- Show display all containers
 Type "a"
 Sleep 400ms
+
+Type "a"
+Sleep 3s
+
+Type "a"
+Sleep 1s
+
+# -- Show delete running container
 Type "j"
-Sleep 200ms
+Sleep 500ms
 Type "j"
-Sleep 200ms
+Sleep 500ms
 Type "j"
-Sleep 200ms
-#Ctrl+d
-#Sleep 1s
-#Enter
-#Sleep 2s
+
+Sleep 500ms
+Ctrl+d
+Sleep 1s
+Enter
+Sleep 2s
+
+# -- Show inspect container
 Type "i"
 Sleep 1s
 PageDown
@@ -67,22 +87,56 @@ Sleep 2s
 
 Escape
 
+Sleep 800ms
+
+# -- Show display logs
+
+Type "j"
+Sleep 800ms
+
+Type "j"
+Sleep 800ms
+
+Type "j"
+Sleep 800ms
+
+Type "l"
+Sleep 8s
+
+Escape
+
+# -- Show change resource/autocomplete
 Type ":"
-Sleep 500ms
+Sleep 1s
 Type "im"
 
 Sleep 1s
-
 Enter
 
 Type "j"
 Sleep 1s
 Type "j"
-PageDown
+Sleep 1s
 
-# Admire the output for a bit.
+# -- Show error notification
+
+Ctrl+d
+Sleep 1s
+
+Enter
+Sleep 3s
+
+Escape
+Sleep 800ms
+
+# -- Show sorting
+
+F3
+Sleep 4s
+F3
 Sleep 2s
 
+# -- Show go back to containers
 Type ":"
 Sleep 1s
 

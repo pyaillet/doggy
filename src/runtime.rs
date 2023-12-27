@@ -1,3 +1,5 @@
+use std::env;
+
 use bollard::{
     container::{
         InspectContainerOptions, ListContainersOptions, LogOutput, LogsOptions,
@@ -17,6 +19,25 @@ use humansize::{FormatSizeI, BINARY};
 use tracing::instrument;
 
 use crate::utils::get_or_not_found;
+
+pub fn get_docker_connection() -> Result<Docker> {
+    let docker_host = env::var("DOCKER_HOST");
+    let docker_cert = env::var("DOCKER_CERT_PATH");
+    match (docker_host, docker_cert) {
+        (Ok(_host), Ok(_certs)) => {
+            log::debug!("Connect with ssl");
+            Ok(Docker::connect_with_ssl_defaults()?)
+        }
+        (Ok(_host), Err(_)) => {
+            log::debug!("Connect with http");
+            Ok(Docker::connect_with_http_defaults()?)
+        }
+        _ => {
+            log::debug!("Connect with socket");
+            Ok(Docker::connect_with_socket_defaults()?)
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct VolumeSummary {
@@ -40,7 +61,7 @@ impl From<VolumeSummary> for [String; 4] {
 
 pub(crate) async fn list_volumes() -> Result<Vec<VolumeSummary>> {
     let options: ListVolumesOptions<String> = Default::default();
-    let docker_cli = Docker::connect_with_socket_defaults()?;
+    let docker_cli = get_docker_connection()?;
     let result = docker_cli.list_volumes(Some(options)).await?;
     let volumes = result
         .volumes
@@ -62,14 +83,14 @@ pub(crate) async fn list_volumes() -> Result<Vec<VolumeSummary>> {
 
 #[allow(dead_code)]
 pub(crate) async fn get_volume(id: &str) -> Result<String> {
-    let docker_cli = Docker::connect_with_socket_defaults()?;
+    let docker_cli = get_docker_connection()?;
     let volume = docker_cli.inspect_volume(id).await?;
     Ok(serde_json::to_string_pretty(&volume)?)
 }
 
 pub(crate) async fn delete_volume(id: &str) -> Result<()> {
     let options = RemoveVolumeOptions { force: true };
-    let docker_cli = Docker::connect_with_socket_defaults()?;
+    let docker_cli = get_docker_connection()?;
     docker_cli.remove_volume(id, Some(options)).await?;
     Ok(())
 }
@@ -96,7 +117,7 @@ impl From<NetworkSummary> for [String; 4] {
 
 pub(crate) async fn list_networks() -> Result<Vec<NetworkSummary>> {
     let options: ListNetworksOptions<String> = Default::default();
-    let docker_cli = Docker::connect_with_socket_defaults()?;
+    let docker_cli = get_docker_connection()?;
     let networks = docker_cli.list_networks(Some(options)).await?;
     let networks = networks
         .iter()
@@ -112,7 +133,7 @@ pub(crate) async fn list_networks() -> Result<Vec<NetworkSummary>> {
 
 #[allow(dead_code)]
 pub(crate) async fn get_network(id: &str) -> Result<String> {
-    let docker_cli = Docker::connect_with_socket_defaults()?;
+    let docker_cli = get_docker_connection()?;
     let network = docker_cli
         .inspect_network(
             id,
@@ -126,7 +147,7 @@ pub(crate) async fn get_network(id: &str) -> Result<String> {
 }
 
 pub(crate) async fn delete_network(id: &str) -> Result<()> {
-    let docker_cli = Docker::connect_with_socket_defaults()?;
+    let docker_cli = get_docker_connection()?;
     let _ = docker_cli.remove_network(id).await;
     Ok(())
 }
@@ -160,7 +181,7 @@ impl From<ImageSummary> for [String; 4] {
 
 pub(crate) async fn list_images() -> Result<Vec<ImageSummary>> {
     let options: ListImagesOptions<String> = Default::default();
-    let docker_cli = Docker::connect_with_socket_defaults()?;
+    let docker_cli = get_docker_connection()?;
     let images = docker_cli.list_images(Some(options)).await?;
     let images = images
         .iter()
@@ -181,7 +202,7 @@ pub(crate) async fn list_images() -> Result<Vec<ImageSummary>> {
 }
 
 pub(crate) async fn get_image(id: &str) -> Result<String> {
-    let docker_cli = Docker::connect_with_socket_defaults()?;
+    let docker_cli = get_docker_connection()?;
     let image = docker_cli.inspect_image(id).await?;
     Ok(serde_json::to_string_pretty(&image)?)
 }
@@ -191,7 +212,7 @@ pub(crate) async fn delete_image(id: &str) -> Result<()> {
         force: true,
         ..Default::default()
     };
-    let docker_cli = Docker::connect_with_socket_defaults()?;
+    let docker_cli = get_docker_connection()?;
     docker_cli.remove_image(id, Some(options), None).await?;
     Ok(())
 }
@@ -202,7 +223,7 @@ pub(crate) async fn delete_container(cid: &str) -> Result<()> {
         force: true,
         ..Default::default()
     };
-    let docker_cli = Docker::connect_with_socket_defaults()?;
+    let docker_cli = get_docker_connection()?;
     docker_cli.remove_container(cid, Some(options)).await?;
     Ok(())
 }
@@ -235,7 +256,7 @@ pub(crate) async fn list_containers(all: bool) -> Result<Vec<ContainerSummary>> 
         all,
         ..Default::default()
     };
-    let docker_cli = Docker::connect_with_socket_defaults().expect("Unable to connect to docker");
+    let docker_cli = get_docker_connection()?;
     let containers = docker_cli
         .list_containers(Some(options))
         .await
@@ -254,7 +275,7 @@ pub(crate) async fn list_containers(all: bool) -> Result<Vec<ContainerSummary>> 
 }
 
 pub(crate) async fn get_container(cid: &str) -> Result<String> {
-    let docker_cli = Docker::connect_with_socket_defaults()?;
+    let docker_cli = get_docker_connection()?;
     let container_details = docker_cli
         .inspect_container(cid, Some(InspectContainerOptions { size: false }))
         .await?;
@@ -265,7 +286,7 @@ pub(crate) fn get_container_logs(
     cid: &str,
     options: LogsOptions<String>,
 ) -> Result<impl Stream<Item = Result<LogOutput>>> {
-    let docker_cli = Docker::connect_with_socket_defaults()?;
+    let docker_cli = get_docker_connection()?;
     let stream = docker_cli.logs(cid, Some(options));
     Ok(stream.map(|item| match item {
         Err(e) => Err(color_eyre::Report::from(e)),

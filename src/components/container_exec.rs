@@ -1,7 +1,6 @@
 use std::io::Write;
 
 use bollard::exec::{CreateExecOptions, ResizeExecOptions, StartExecResults};
-use bollard::Docker;
 use color_eyre::Result;
 
 use crossterm::cursor::{self, MoveTo};
@@ -20,6 +19,7 @@ use tokio::task::spawn;
 
 use crate::action::Action;
 use crate::components::Component;
+use crate::runtime::get_docker_connection;
 use crate::tui;
 
 const DEFAULT_CMD: &str = "/bin/bash";
@@ -49,7 +49,7 @@ impl ContainerExec {
         let tty_size = crossterm::terminal::size()?;
         let mut stdout = std::io::stdout();
 
-        let docker = Docker::connect_with_socket_defaults()?;
+        let docker = get_docker_connection()?;
         let exec = docker
             .create_exec(
                 &self.cid,

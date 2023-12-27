@@ -328,17 +328,15 @@ impl Component for Containers {
                 }
             }
             (Action::Ok, Popup::Delete(cid, _)) => {
-                block_on(async {
-                    if let Err(e) = block_on(delete_container(&cid)) {
-                        tx.send(Action::Error(format!(
-                            "Unable to delete container \"{}\" {}",
-                            cid, e
-                        )))
-                        .expect("Unable to send error");
-                    } else {
-                        self.show_popup = Popup::None;
-                    }
-                });
+                if let Err(e) = block_on(delete_container(&cid)) {
+                    tx.send(Action::Error(format!(
+                        "Unable to delete container \"{}\" {}",
+                        cid, e
+                    )))
+                    .expect("Unable to send error");
+                } else {
+                    self.show_popup = Popup::None;
+                }
             }
             (Action::Ok, Popup::Shell(shell)) => {
                 let action = Action::Screen(ComponentInit::ContainerExec(
