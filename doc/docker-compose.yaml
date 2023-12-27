@@ -2,8 +2,43 @@ version: "3.8"
 services:
   vhs:
     image: ghcr.io/charmbracelet/vhs
-    build: .
+    build:
+      context: ../
+      dockerfile: ./doc/Dockerfile
+    environment:
+      RUST_BACKTRACE: "1"
+      DOCKER_HOST: tcp://dind-rootless:2376
+      DOCKER_CERT_PATH: /certs/client/
     working_dir: /vhs
     volumes:
       - ../:/vhs
-      - /var/run/docker.sock:/var/run/docker.sock
+      - certs:/certs
+  dind-rootless:
+    image: docker:24.0-dind-rootless
+    hostname: dind-rootless
+    privileged: true
+    command:
+      - --host=tcp://0.0.0.0:2376
+    environment:
+      DOCKER_TLS_CERTDIR: /certs
+    volumes:
+      - certs:/certs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "tcp://dind-rootless:2376"]
+      interval: 1m30s
+      timeout: 10s
+      retries: 3
+      start_period: 2m
+  docker:
+    image: docker:latest
+    entrypoint:
+      - /scripts/init.sh
+    volumes:
+      - certs:/certs
+      - ./scripts:/scripts
+    depends_on:
+      - dind-rootless
+
+volumes:
+  certs:
+

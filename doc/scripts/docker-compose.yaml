@@ -1,0 +1,12 @@
+version: "3.8"
+services:
+  whoami:
+    image: traefik/whoami:v1.10
+    command:
+      - --verbose 
+  debian:
+    image: debian:bookworm
+    command:
+      - bash
+      - -c
+      - apt update && apt install -y curl && while true; do sleep 1; curl whoami/api; done

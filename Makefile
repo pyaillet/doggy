@@ -3,11 +3,12 @@ default:
 .PHONY: preview
 preview: doc/preview.gif
 
-doc/preview.gif: doc/preview.tape doc/docker-compose.yaml target/x86_64-unknown-linux-gnu/release/doggy
+doc/preview.gif: prepare-preview doc/preview.tape doc/docker-compose.yaml src/*.rs src/components/*.rs
 	docker compose -f doc/docker-compose.yaml run --build vhs ./doc/preview.tape
 
-target/x86_64-unknown-linux-gnu/release/doggy: src/*.rs src/components/*.rs
-	RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target x86_64-unknown-linux-gnu
+prepare-preview:
+	docker compose -f doc/docker-compose.yaml up -d
+	docker wait doc-docker-1
 
 .PHONY: tracing
 tracing:
