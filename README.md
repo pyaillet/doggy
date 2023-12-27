@@ -25,6 +25,15 @@ You can download one of the binary from the release page
 
 ## Usage
 
+### Docker connection
+
+By default `doggy` will try the following in order:
+1. Check for existence of the environment variables `DOCKER_HOST` and `DOCKER_CERT_PATH`, if both are defined it will try to connect to the address in the `DOCKER_HOST` variable and use `ca.pem`, `cert.pem` and `key.pem` in `DOCKER_CERT_PATH` to establish a secure connection to the docker daemon.
+2. Check for existence of the environment variables `DOCKER_HOST`, if only this one is defined it will try to connect to the address in the `DOCKER_HOST` variable to establish *an insecure connection* to the docker daemon.
+3. If the variables are not defined, it will connect to the local socket `unix:///var/run/docker.sock`
+
+### Key bindings
+
 - Display help screen: `?`
 - Change view: `:` and resource name (`containers`, `images`, `networks`, `volumes`)
 - Container view:
