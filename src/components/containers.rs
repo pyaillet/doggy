@@ -77,7 +77,7 @@ pub struct Containers {
 }
 
 impl Containers {
-    pub fn new() -> Self {
+    pub fn new(filter: Option<String>) -> Self {
         Containers {
             all: false,
             state: Default::default(),
@@ -85,7 +85,7 @@ impl Containers {
             show_popup: Popup::None,
             action_tx: None,
             sort_by: SortColumn::Name(SortOrder::Asc),
-            filter: None,
+            filter,
         }
     }
 

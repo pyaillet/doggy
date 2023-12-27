@@ -1,5 +1,6 @@
 use color_eyre::Result;
 
+use crossterm::event::KeyCode;
 use futures::executor::block_on;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Style, Stylize};
@@ -12,6 +13,8 @@ use crate::action::Action;
 use crate::components::Component;
 use crate::runtime::{delete_image, get_image, list_images, ImageSummary};
 use crate::utils::{centered_rect, table};
+
+use super::ComponentInit;
 
 const IMAGE_CONSTRAINTS: [Constraint; 4] = [
     Constraint::Max(15),
@@ -253,11 +256,24 @@ impl Component for Images {
         Some(&[
             ("ctrl+d", "Delete"),
             ("i", "Inspect/View details"),
+            ("c", "Show containers"),
             ("F1", "Sort by image id"),
             ("F2", "Sort by image name"),
             ("F3", "Sort by image size"),
             ("F4", "Sort by image age"),
         ])
+    }
+
+    fn get_action(&self, k: &crossterm::event::KeyEvent) -> Option<Action> {
+        if let KeyCode::Char('c') = k.code {
+            if let Some((id, _)) = self.get_selected_image_info() {
+                Some(Action::Screen(ComponentInit::Containers(Some(id))))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
     }
 
     fn has_filter(&self) -> bool {

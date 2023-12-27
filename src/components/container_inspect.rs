@@ -53,7 +53,7 @@ impl Component for ContainerDetails {
         match action {
             Action::PreviousScreen => {
                 if let Some(tx) = self.action_tx.clone() {
-                    tx.send(Action::Screen(super::ComponentInit::Containers))?;
+                    tx.send(Action::Screen(super::ComponentInit::Containers(None)))?;
                 }
             }
             Action::Up => {

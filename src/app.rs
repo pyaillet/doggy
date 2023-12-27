@@ -72,7 +72,7 @@ impl App {
         tui.frame_rate(self.frame_rate);
         tui.enter()?;
 
-        let mut main: Box<dyn Component> = Box::new(Containers::new());
+        let mut main: Box<dyn Component> = Box::new(Containers::new(None));
         main.register_action_handler(action_tx.clone());
 
         loop {
@@ -319,7 +319,7 @@ impl App {
             match self.suggestion {
                 Some(CONTAINERS) => {
                     self.reset_input();
-                    Some(Action::Screen(ComponentInit::Containers))
+                    Some(Action::Screen(ComponentInit::Containers(None)))
                 }
                 Some(IMAGES) => {
                     self.reset_input();
