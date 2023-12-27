@@ -26,9 +26,6 @@ Sleep 800ms
 Type "j"
 Sleep 1s
 
-Type "j"
-Sleep 1s
-
 Type "S"
 Sleep 1s
 Type "/bin/sh"
@@ -65,13 +62,14 @@ Type "j"
 Sleep 500ms
 Type "j"
 Sleep 500ms
-Type "j"
 
-Sleep 500ms
 Ctrl+d
 Sleep 1s
 Enter
 Sleep 2s
+
+Sleep 500ms
+Type "j"
 
 # -- Show inspect container
 Type "i"
@@ -90,9 +88,6 @@ Escape
 Sleep 800ms
 
 # -- Show display logs
-
-Type "j"
-Sleep 800ms
 
 Type "j"
 Sleep 800ms
@@ -135,6 +130,21 @@ F3
 Sleep 4s
 F3
 Sleep 2s
+
+# -- Filter image names
+
+Type "/"
+Sleep 800ms
+
+Type "ubun"
+Sleep 800ms
+Enter
+Sleep 2s
+
+Type "/"
+Sleep 400ms
+Enter
+Sleep 1s
 
 # -- Show go back to containers
 Type ":"

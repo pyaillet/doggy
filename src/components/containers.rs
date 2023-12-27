@@ -404,30 +404,38 @@ impl Component for Containers {
         self.draw_popup(f);
     }
 
-    fn handle_input(&mut self, kevent: event::KeyEvent) -> Result<()> {
+    fn handle_input(&mut self, kevent: event::KeyEvent) -> Result<Option<event::KeyEvent>> {
         if let Popup::Shell(ref mut _shell_popup) = self.show_popup {
             if kevent.kind == KeyEventKind::Press {
                 match kevent.code {
                     KeyCode::Char(to_insert) => {
                         self.enter_char(to_insert);
+                        Ok(None)
                     }
                     KeyCode::Backspace => {
                         self.delete_char();
+                        Ok(None)
                     }
                     KeyCode::Left => {
                         self.move_cursor_left();
+                        Ok(None)
                     }
                     KeyCode::Right => {
                         self.move_cursor_right();
+                        Ok(None)
                     }
                     KeyCode::Esc => {
                         self.show_popup = Popup::None;
+                        Ok(None)
                     }
-                    _ => {}
+                    _ => Ok(Some(kevent))
                 }
-            };
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(Some(kevent))
         }
-        Ok(())
     }
 
     fn get_bindings(&self) -> Option<&[(&str, &str)]> {

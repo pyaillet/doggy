@@ -86,8 +86,9 @@ impl App {
                             self.handle_input(kevent, action_tx.clone())?;
                         }
                         InputMode::None => {
-                            main.handle_input(kevent)?;
-                            self.handle_key(main.as_ref(), kevent, action_tx.clone())?;
+                            if let Some(kevent) = main.handle_input(kevent)? {
+                                self.handle_key(main.as_ref(), kevent, action_tx.clone())?;
+                            }
                         }
                     },
                     _ => {}
