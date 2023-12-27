@@ -31,9 +31,10 @@ lazy_static! {
     pub static ref LOG_FILE: String = format!("{}.log", env!("CARGO_PKG_NAME"));
 }
 
-const GENERAL_BINDINGS: [(&str, &str); 4] = [
+const GENERAL_BINDINGS: [(&str, &str); 5] = [
     ("q", "Quit"),
     (":", "Change resource"),
+    ("/", "Filter resources"),
     ("?", "Help"),
     ("ESC", "Cancel/Previous screen"),
 ];
@@ -307,7 +308,7 @@ pub fn initialize_logging() -> Result<()> {
         "RUST_LOG",
         std::env::var("RUST_LOG")
             .or_else(|_| std::env::var(LOG_ENV.clone()))
-            .unwrap_or_else(|_| format!("{}=trace", env!("CARGO_CRATE_NAME"))),
+            .unwrap_or_else(|_| format!("{}=info", env!("CARGO_CRATE_NAME"))),
     );
 
     // The SubscriberExt and SubscriberInitExt traits are needed to extend the

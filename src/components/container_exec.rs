@@ -14,8 +14,8 @@ use ratatui::Frame;
 use tokio::io::{stdin, AsyncReadExt, AsyncWriteExt};
 use tokio::select;
 use tokio::sync::mpsc::UnboundedSender;
-use tokio::sync::oneshot::channel;
 use tokio::task::spawn;
+use tokio_util::sync::CancellationToken;
 
 use crate::action::Action;
 use crate::components::Component;
@@ -45,7 +45,8 @@ impl ContainerExec {
     }
 
     async fn exec(&mut self) -> Result<()> {
-        let (tx_stdin_loop, mut rx) = channel();
+        let cancellation_token = CancellationToken::new();
+        let _cancellation_token = cancellation_token.clone();
         let tty_size = crossterm::terminal::size()?;
         let mut stdout = std::io::stdout();
 
@@ -77,7 +78,7 @@ impl ContainerExec {
                 let mut stdin = stdin();
                 while !should_stop {
                     select!(
-                        _ = &mut rx => { should_stop = true; },
+                        _ = _cancellation_token.cancelled() => { should_stop = true; },
                         _ = stdin.read(&mut buf) => { input.write(&buf).await.ok(); }
                     );
                 }
@@ -101,10 +102,11 @@ impl ContainerExec {
             while let Some(Ok(output)) = output.next().await {
                 stdout.write_all(output.into_bytes().as_ref())?;
                 stdout.flush()?;
+                log::debug!("========================== FLUSH");
             }
 
             log::debug!("Closing terminal");
-            tx_stdin_loop.send(()).expect("Unable to cancel stdin task");
+            cancellation_token.cancel();
             handle.await?;
         }
         Ok(())

@@ -45,6 +45,7 @@ pub struct Networks {
     show_popup: Popup,
     action_tx: Option<UnboundedSender<Action>>,
     sort_by: SortColumn,
+    filter: Option<String>,
 }
 
 impl Networks {
@@ -55,6 +56,7 @@ impl Networks {
             show_popup: Popup::None,
             action_tx: None,
             sort_by: SortColumn::Name(SortOrder::Asc),
+            filter: None,
         }
     }
 
@@ -153,7 +155,7 @@ impl Component for Networks {
     fn update(&mut self, action: Action) -> Result<()> {
         let tx = self.action_tx.clone().expect("No action sender available");
         match action {
-            Action::Tick => match block_on(list_networks()) {
+            Action::Tick => match block_on(list_networks(&self.filter)) {
                 Ok(networks) => {
                     self.networks = networks;
                     self.sort();
@@ -188,6 +190,9 @@ impl Component for Networks {
                     };
                     tx.send(action)?;
                 };
+            }
+            Action::SetFilter(filter) => {
+                self.filter = filter;
             }
             Action::Delete => {
                 if let Some((id, _)) = self.get_selected_network_info() {
@@ -232,7 +237,14 @@ impl Component for Networks {
             .constraints([Constraint::Percentage(100)])
             .split(area);
         let t = table(
-            self.get_name().to_string(),
+            format!(
+                "{}{}",
+                self.get_name(),
+                match &self.filter {
+                    Some(f) => format!(" - Filter: {}", f),
+                    None => "".to_string(),
+                }
+            ),
             ["Id", "Name", "Driver", "Age"],
             self.networks.iter().map(|n| (*n).clone().into()).collect(),
             &NETWORK_CONSTRAINTS,
@@ -251,5 +263,9 @@ impl Component for Networks {
             ("F3", "Sort by network driver"),
             ("F4", "Sort by image age"),
         ])
+    }
+
+    fn has_filter(&self) -> bool {
+        true
     }
 }

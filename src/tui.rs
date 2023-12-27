@@ -75,6 +75,7 @@ impl Tui {
         let _cancellation_token = self.cancellation_token.clone();
         let _event_tx = self.event_tx.clone();
         self.task = tokio::spawn(async move {
+            log::debug!("Start tui loop");
             let mut reader = crossterm::event::EventStream::new();
             let mut tick_interval = tokio::time::interval(tick_delay);
             let mut render_interval = tokio::time::interval(render_delay);

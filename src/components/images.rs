@@ -32,6 +32,7 @@ pub struct Images {
     show_popup: Popup,
     action_tx: Option<UnboundedSender<Action>>,
     sort_by: SortColumn,
+    filter: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -56,6 +57,7 @@ impl Images {
             show_popup: Popup::None,
             action_tx: None,
             sort_by: SortColumn::Age(SortOrder::Asc),
+            filter: None,
         }
     }
 
@@ -155,7 +157,7 @@ impl Component for Images {
         let tx = self.action_tx.clone().expect("No action sender available");
         match action {
             Action::Tick => {
-                self.images = block_on(list_images())?;
+                self.images = block_on(list_images(&self.filter))?;
                 self.sort();
                 if self.state.selected().is_none() {
                     self.state.select(Some(0));
@@ -182,6 +184,9 @@ impl Component for Images {
                     };
                     tx.send(action)?;
                 };
+            }
+            Action::SetFilter(filter) => {
+                self.filter = filter;
             }
             Action::Delete => {
                 if let Some((id, tag)) = self.get_selected_image_info() {
@@ -227,7 +232,14 @@ impl Component for Images {
             .constraints([Constraint::Percentage(100)])
             .split(area);
         let t = table(
-            self.get_name().to_string(),
+            format!(
+                "{}{}",
+                self.get_name(),
+                match &self.filter {
+                    Some(f) => format!(" - Filter: {}", f),
+                    None => "".to_string(),
+                }
+            ),
             ["Id", "Name", "Size", "Age"],
             self.images.iter().map(|i| (*i).clone().into()).collect(),
             &IMAGE_CONSTRAINTS,
@@ -246,5 +258,9 @@ impl Component for Images {
             ("F3", "Sort by image size"),
             ("F4", "Sort by image age"),
         ])
+    }
+
+    fn has_filter(&self) -> bool {
+        true
     }
 }

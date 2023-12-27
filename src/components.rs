@@ -95,8 +95,8 @@ pub(crate) trait Component {
         Ok(())
     }
 
-    fn handle_input(&mut self, _kevent: event::KeyEvent) -> Result<()> {
-        Ok(())
+    fn handle_input(&mut self, kevent: event::KeyEvent) -> Result<Option<event::KeyEvent>> {
+        Ok(Some(kevent))
     }
 
     fn get_bindings(&self) -> Option<&[(&str, &str)]> {
@@ -105,5 +105,9 @@ pub(crate) trait Component {
 
     fn get_action(&self, _k: &KeyEvent) -> Option<Action> {
         None
+    }
+
+    fn has_filter(&self) -> bool {
+        false
     }
 }

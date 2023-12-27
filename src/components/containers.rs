@@ -73,6 +73,7 @@ pub struct Containers {
     show_popup: Popup,
     action_tx: Option<UnboundedSender<Action>>,
     sort_by: SortColumn,
+    filter: Option<String>,
 }
 
 impl Containers {
@@ -84,6 +85,7 @@ impl Containers {
             show_popup: Popup::None,
             action_tx: None,
             sort_by: SortColumn::Name(SortOrder::Asc),
+            filter: None,
         }
     }
 
@@ -265,7 +267,7 @@ impl Component for Containers {
             .expect("Action tx queue not initialized");
         match (action, self.show_popup.clone()) {
             (Action::Tick, Popup::None) => {
-                self.containers = match block_on(list_containers(self.all)) {
+                self.containers = match block_on(list_containers(self.all, &self.filter)) {
                     Ok(containers) => containers,
                     Err(e) => {
                         tx.send(Action::Error(format!(
@@ -288,6 +290,9 @@ impl Component for Containers {
             }
             (Action::All, Popup::None) => {
                 self.all = !self.all;
+            }
+            (Action::SetFilter(filter), Popup::None) => {
+                self.filter = filter;
             }
             (Action::Inspect, Popup::None) => {
                 if let Some(cinfo) = self.get_selected_container_info() {
@@ -378,9 +383,14 @@ impl Component for Containers {
             .split(area);
         let t = table(
             format!(
-                "{} ({})",
+                "{} ({}{})",
                 self.get_name(),
-                if self.all { "All" } else { "Running" }
+                if self.all { "All" } else { "Running" },
+                if let Some(filter) = &self.filter {
+                    format!(" - Filter: {}", filter)
+                } else {
+                    "".to_string()
+                }
             ),
             ["Id", "Name", "Image", "Status"],
             self.containers
@@ -394,30 +404,38 @@ impl Component for Containers {
         self.draw_popup(f);
     }
 
-    fn handle_input(&mut self, kevent: event::KeyEvent) -> Result<()> {
+    fn handle_input(&mut self, kevent: event::KeyEvent) -> Result<Option<event::KeyEvent>> {
         if let Popup::Shell(ref mut _shell_popup) = self.show_popup {
             if kevent.kind == KeyEventKind::Press {
                 match kevent.code {
                     KeyCode::Char(to_insert) => {
                         self.enter_char(to_insert);
+                        Ok(None)
                     }
                     KeyCode::Backspace => {
                         self.delete_char();
+                        Ok(None)
                     }
                     KeyCode::Left => {
                         self.move_cursor_left();
+                        Ok(None)
                     }
                     KeyCode::Right => {
                         self.move_cursor_right();
+                        Ok(None)
                     }
                     KeyCode::Esc => {
                         self.show_popup = Popup::None;
+                        Ok(None)
                     }
-                    _ => {}
+                    _ => Ok(Some(kevent)),
                 }
-            };
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(Some(kevent))
         }
-        Ok(())
     }
 
     fn get_bindings(&self) -> Option<&[(&str, &str)]> {
@@ -442,5 +460,9 @@ impl Component for Containers {
             KeyCode::Char('S') => Some(Action::CustomShell),
             _ => None,
         }
+    }
+
+    fn has_filter(&self) -> bool {
+        true
     }
 }
