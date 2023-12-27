@@ -276,6 +276,9 @@ impl Component for Containers {
                     }
                 };
                 self.sort();
+                if self.state.selected().is_none() {
+                    self.state.select(Some(0));
+                }
             }
             (Action::Down, Popup::None) => {
                 self.next();

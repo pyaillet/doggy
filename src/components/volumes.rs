@@ -157,6 +157,9 @@ impl Component for Volumes {
                 Ok(volumes) => {
                     self.volumes = volumes;
                     self.sort();
+                    if self.state.selected().is_none() {
+                        self.state.select(Some(0));
+                    }
                 }
                 Err(e) => tx.send(Action::Error(format!("Error listing volumes:\n{}", e)))?,
             },

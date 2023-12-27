@@ -157,6 +157,9 @@ impl Component for Images {
             Action::Tick => {
                 self.images = block_on(list_images())?;
                 self.sort();
+                if self.state.selected().is_none() {
+                    self.state.select(Some(0));
+                }
             }
             Action::Down => {
                 self.next();

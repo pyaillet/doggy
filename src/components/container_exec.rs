@@ -126,7 +126,6 @@ impl Component for ContainerExec {
     }
 
     fn teardown(&mut self, t: &mut tui::Tui) -> Result<()> {
-        t.start();
         t.clear()?;
         Ok(())
     }

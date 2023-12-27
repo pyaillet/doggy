@@ -157,6 +157,9 @@ impl Component for Networks {
                 Ok(networks) => {
                     self.networks = networks;
                     self.sort();
+                    if self.state.selected().is_none() {
+                        self.state.select(Some(0));
+                    }
                 }
                 Err(e) => self
                     .action_tx
