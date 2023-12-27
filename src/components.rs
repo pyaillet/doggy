@@ -32,7 +32,7 @@ pub mod volumes;
 
 #[derive(Clone, Debug)]
 pub(crate) enum ComponentInit {
-    Containers,
+    Containers(Option<String>),
     ContainerExec(String, String, Option<String>),
     ContainerInspect(String, String, String),
     ContainerLogs(String, String),
@@ -47,7 +47,7 @@ pub(crate) enum ComponentInit {
 impl ComponentInit {
     pub fn get_component(self) -> Box<dyn Component> {
         match self {
-            ComponentInit::Containers => Box::new(Containers::new()),
+            ComponentInit::Containers(filter) => Box::new(Containers::new(filter)),
             ComponentInit::ContainerExec(id, cname, cmd) => {
                 Box::new(ContainerExec::new(id, cname, cmd))
             }

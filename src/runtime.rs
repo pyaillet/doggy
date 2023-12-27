@@ -241,6 +241,7 @@ pub struct ContainerSummary {
     pub id: String,
     pub name: String,
     pub image: String,
+    pub image_id: String,
     pub status: String,
     pub age: i64,
 }
@@ -278,11 +279,12 @@ pub(crate) async fn list_containers(
             id: get_or_not_found!(c.id),
             name: get_or_not_found!(c.names, |c| c.first().and_then(|s| s.split('/').last())),
             image: get_or_not_found!(c.image, |i| i.split('@').next()),
+            image_id: get_or_not_found!(c.image_id),
             status: get_or_not_found!(c.state),
             age: c.created.unwrap_or_default(),
         })
         .filter(|c| match filter {
-            Some(f) => c.name.contains(f) || c.image.contains(f),
+            Some(f) => c.name.contains(f) || c.image.contains(f) || c.image_id.contains(f),
             None => true,
         })
         .collect();
