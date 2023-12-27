@@ -36,6 +36,7 @@ By default `doggy` will try the following in order:
 
 - Display help screen: `?`
 - Change view: `:` and resource name (`containers`, `images`, `networks`, `volumes`)
+- Filter resources by name: `/`
 - Container view:
   - Show/hide stopped containers: `a`
   - Launch `/bin/bash` in the container: `s`
@@ -53,19 +54,21 @@ By default `doggy` will try the following in order:
 
 - [x] List containers
 - [x] Display the stopped containers
-- [ ] Filter the container list
+- [x] Filter the container list
 - [x] Inspect containers
 - [x] View container logs
 - [x] Exec `/bin/bash` in a container
 - [x] Delete containers (running or stopped)
 - [x] List images
 - [x] Inspect image
-- [ ] Filter the image list
+- [x] Filter the image list
 - [x] Delete images (not used by any container)
 - [x] List networks
 - [x] Inspect network
+- [x] Filter the network list
 - [x] Delete network
 - [x] List volumes
 - [x] Inspect volume
+- [x] Filter the volume list
 - [x] Delete volume
 
