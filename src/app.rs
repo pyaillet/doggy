@@ -13,6 +13,7 @@ use crate::utils::{default_layout, help_screen, toast};
 enum InputMode {
     None,
     Change,
+    Filter,
 }
 
 const DEFAULT_TOAST_DELAY: usize = 8;
@@ -81,7 +82,7 @@ impl App {
                     tui::Event::Render => action_tx.send(Action::Render)?,
                     tui::Event::Resize(x, y) => action_tx.send(Action::Resize(x, y))?,
                     tui::Event::Key(kevent) => match self.input_mode {
-                        InputMode::Change => {
+                        InputMode::Change | InputMode::Filter => {
                             self.handle_input(kevent, action_tx.clone())?;
                         }
                         InputMode::None => {
@@ -128,6 +129,9 @@ impl App {
                     Action::Change => {
                         self.input_mode = InputMode::Change;
                     }
+                    Action::Filter => {
+                        self.input_mode = InputMode::Filter;
+                    }
                     Action::Help => {
                         self.show_popup = Popup::Help;
                     }
@@ -151,11 +155,8 @@ impl App {
                     }
                     _ => {}
                 };
-                match self.input_mode {
-                    InputMode::None => {
-                        main.update(action.clone())?;
-                    }
-                    InputMode::Change => {}
+                if let InputMode::None = self.input_mode {
+                    main.update(action.clone())?;
                 }
             }
             if self.should_suspend {
@@ -196,20 +197,26 @@ impl App {
                 f.render_widget(p, rect)
             }
             InputMode::Change => {
-                let input = Paragraph::new(Line::from(if let Some(suggestion) = self.suggestion {
-                    vec![
-                        Span::styled(self.input.to_string(), Style::default().gray()),
-                        Span::styled(
-                            suggestion[self.cursor_position..].to_string(),
-                            Style::default().dark_gray(),
-                        ),
-                    ]
-                } else {
-                    vec![Span::styled(
-                        self.input.to_string(),
-                        Style::default().gray(),
-                    )]
-                }))
+                let mut spans = vec![
+                    Span::styled("> ", Style::default().bold()),
+                    Span::styled(self.input.to_string(), Style::default().gray()),
+                ];
+                if let Some(suggestion) = self.suggestion {
+                    spans.push(Span::styled(
+                        suggestion[self.cursor_position..].to_string(),
+                        Style::default().dark_gray(),
+                    ));
+                }
+
+                let input = Paragraph::new(Line::from(spans))
+                    .block(Block::default().borders(Borders::ALL).title("Input"));
+                f.render_widget(input, rect);
+            }
+            InputMode::Filter => {
+                let input = Paragraph::new(Line::from(vec![
+                    Span::styled("/ ", Style::default().bold()),
+                    Span::styled(self.input.to_string(), Style::default().gray()),
+                ]))
                 .block(Block::default().borders(Borders::ALL).title("Input"));
                 f.render_widget(input, rect);
             }
@@ -307,24 +314,34 @@ impl App {
     }
 
     fn submit_input(&mut self) -> Option<Action> {
-        match self.suggestion {
-            Some(CONTAINERS) => {
-                self.reset_input();
-                Some(Action::Screen(ComponentInit::Containers))
+        if let InputMode::Change = self.input_mode {
+            match self.suggestion {
+                Some(CONTAINERS) => {
+                    self.reset_input();
+                    Some(Action::Screen(ComponentInit::Containers))
+                }
+                Some(IMAGES) => {
+                    self.reset_input();
+                    Some(Action::Screen(ComponentInit::Images))
+                }
+                Some(VOLUMES) => {
+                    self.reset_input();
+                    Some(Action::Screen(ComponentInit::Volumes))
+                }
+                Some(NETWORKS) => {
+                    self.reset_input();
+                    Some(Action::Screen(ComponentInit::Networks))
+                }
+                _ => None,
             }
-            Some(IMAGES) => {
-                self.reset_input();
-                Some(Action::Screen(ComponentInit::Images))
+        } else {
+            let input = self.input.clone();
+            self.reset_input();
+            if input.is_empty() {
+                Some(Action::SetFilter(None))
+            } else {
+                Some(Action::SetFilter(Some(input.clone())))
             }
-            Some(VOLUMES) => {
-                self.reset_input();
-                Some(Action::Screen(ComponentInit::Volumes))
-            }
-            Some(NETWORKS) => {
-                self.reset_input();
-                Some(Action::Screen(ComponentInit::Networks))
-            }
-            _ => None,
         }
     }
 
@@ -351,6 +368,13 @@ impl App {
                 KeyCode::Char('a') => Some(Action::All),
                 KeyCode::Char('q') => Some(Action::Quit),
                 KeyCode::Char(':') => Some(Action::Change),
+                KeyCode::Char('/') => {
+                    if main.has_filter() {
+                        Some(Action::Filter)
+                    } else {
+                        None
+                    }
+                }
                 KeyCode::Char('j') | KeyCode::Down => Some(Action::Down),
                 KeyCode::Char('k') | KeyCode::Up => Some(Action::Up),
                 KeyCode::Char('?') => Some(Action::Help),

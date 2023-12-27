@@ -73,6 +73,7 @@ pub struct Containers {
     show_popup: Popup,
     action_tx: Option<UnboundedSender<Action>>,
     sort_by: SortColumn,
+    filter: Option<String>,
 }
 
 impl Containers {
@@ -84,6 +85,7 @@ impl Containers {
             show_popup: Popup::None,
             action_tx: None,
             sort_by: SortColumn::Name(SortOrder::Asc),
+            filter: None,
         }
     }
 
@@ -265,7 +267,7 @@ impl Component for Containers {
             .expect("Action tx queue not initialized");
         match (action, self.show_popup.clone()) {
             (Action::Tick, Popup::None) => {
-                self.containers = match block_on(list_containers(self.all)) {
+                self.containers = match block_on(list_containers(self.all, &self.filter)) {
                     Ok(containers) => containers,
                     Err(e) => {
                         tx.send(Action::Error(format!(
@@ -288,6 +290,9 @@ impl Component for Containers {
             }
             (Action::All, Popup::None) => {
                 self.all = !self.all;
+            }
+            (Action::SetFilter(filter), Popup::None) => {
+                self.filter = filter;
             }
             (Action::Inspect, Popup::None) => {
                 if let Some(cinfo) = self.get_selected_container_info() {
@@ -378,9 +383,14 @@ impl Component for Containers {
             .split(area);
         let t = table(
             format!(
-                "{} ({})",
+                "{} ({}{})",
                 self.get_name(),
-                if self.all { "All" } else { "Running" }
+                if self.all { "All" } else { "Running" },
+                if let Some(filter) = &self.filter {
+                    format!(" - Filter: {}", filter)
+                } else {
+                    "".to_string()
+                }
             ),
             ["Id", "Name", "Image", "Status"],
             self.containers
@@ -442,5 +452,9 @@ impl Component for Containers {
             KeyCode::Char('S') => Some(Action::CustomShell),
             _ => None,
         }
+    }
+
+    fn has_filter(&self) -> bool {
+        true
     }
 }

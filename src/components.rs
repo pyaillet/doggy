@@ -106,4 +106,8 @@ pub(crate) trait Component {
     fn get_action(&self, _k: &KeyEvent) -> Option<Action> {
         None
     }
+
+    fn has_filter(&self) -> bool {
+        false
+    }
 }

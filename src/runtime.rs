@@ -115,7 +115,7 @@ impl From<NetworkSummary> for [String; 4] {
     }
 }
 
-pub(crate) async fn list_networks() -> Result<Vec<NetworkSummary>> {
+pub(crate) async fn list_networks(filter: &Option<String>) -> Result<Vec<NetworkSummary>> {
     let options: ListNetworksOptions<String> = Default::default();
     let docker_cli = get_docker_connection()?;
     let networks = docker_cli.list_networks(Some(options)).await?;
@@ -126,6 +126,10 @@ pub(crate) async fn list_networks() -> Result<Vec<NetworkSummary>> {
             name: n.name.to_owned().unwrap_or("<Unknown>".to_string()),
             driver: n.driver.to_owned().unwrap_or("<Unknown>".to_string()),
             created: n.created.to_owned().unwrap_or("<Unknown>".to_string()),
+        })
+        .filter(|n| match filter {
+            Some(f) => n.name.contains(f),
+            None => true,
         })
         .collect();
     Ok(networks)
@@ -179,7 +183,7 @@ impl From<ImageSummary> for [String; 4] {
     }
 }
 
-pub(crate) async fn list_images() -> Result<Vec<ImageSummary>> {
+pub(crate) async fn list_images(filter: &Option<String>) -> Result<Vec<ImageSummary>> {
     let options: ListImagesOptions<String> = Default::default();
     let docker_cli = get_docker_connection()?;
     let images = docker_cli.list_images(Some(options)).await?;
@@ -196,6 +200,10 @@ pub(crate) async fn list_images() -> Result<Vec<ImageSummary>> {
             name: get_or_not_found!(i.repo_tags.first()),
             size: i.size,
             created: i.created,
+        })
+        .filter(|i| match filter {
+            Some(f) => i.name.contains(f),
+            None => true,
         })
         .collect();
     Ok(images)
@@ -251,7 +259,10 @@ impl From<ContainerSummary> for [String; 4] {
 }
 
 #[instrument(name = "containers::list_containers")]
-pub(crate) async fn list_containers(all: bool) -> Result<Vec<ContainerSummary>> {
+pub(crate) async fn list_containers(
+    all: bool,
+    filter: &Option<String>,
+) -> Result<Vec<ContainerSummary>> {
     let options: ListContainersOptions<String> = ListContainersOptions {
         all,
         ..Default::default()
@@ -269,6 +280,10 @@ pub(crate) async fn list_containers(all: bool) -> Result<Vec<ContainerSummary>> 
             image: get_or_not_found!(c.image, |i| i.split('@').next()),
             status: get_or_not_found!(c.state),
             age: c.created.unwrap_or_default(),
+        })
+        .filter(|c| match filter {
+            Some(f) => c.name.contains(f) || c.image.contains(f),
+            None => true,
         })
         .collect();
     Ok(containers)

@@ -45,6 +45,7 @@ pub struct Volumes {
     show_popup: Popup,
     action_tx: Option<UnboundedSender<Action>>,
     sort_by: SortColumn,
+    filter: Option<String>,
 }
 
 impl Volumes {
@@ -55,6 +56,7 @@ impl Volumes {
             show_popup: Popup::None,
             action_tx: None,
             sort_by: SortColumn::Id(SortOrder::Asc),
+            filter: None,
         }
     }
 
@@ -185,6 +187,9 @@ impl Component for Volumes {
                     tx.send(action)?;
                 };
             }
+            Action::SetFilter(filter) => {
+                self.filter = filter;
+            }
             Action::Delete => {
                 if let Some(id) = self.get_selected_volume_info() {
                     self.show_popup = Popup::Delete(id);
@@ -228,7 +233,14 @@ impl Component for Volumes {
             .constraints([Constraint::Percentage(100)])
             .split(area);
         let t = table(
-            self.get_name().to_string(),
+            format!(
+                "{}{}",
+                self.get_name(),
+                match &self.filter {
+                    Some(f) => format!(" - Filter: {}", f),
+                    None => "".to_string(),
+                }
+            ),
             ["Id", "Driver", "Size", "Age"],
             self.volumes.iter().map(|v| (*v).clone().into()).collect(),
             &VOLUME_CONSTRAINTS,
@@ -247,5 +259,9 @@ impl Component for Volumes {
             ("F3", "Sort by volume size"),
             ("F4", "Sort by volume age"),
         ])
+    }
+
+    fn has_filter(&self) -> bool {
+        true
     }
 }
