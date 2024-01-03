@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::components::ComponentInit;
+use crate::components::Component;
 
 #[derive(Clone, Debug)]
 pub(crate) enum Action {
@@ -14,7 +14,7 @@ pub(crate) enum Action {
     Logs,
     Shell,
     Delete,
-    Screen(ComponentInit),
+    Screen(Component),
     Ok,
     PreviousScreen,
     Change,

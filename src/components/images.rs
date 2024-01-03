@@ -1,7 +1,6 @@
 use color_eyre::Result;
 
 use crossterm::event::KeyCode;
-use futures::executor::block_on;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Span};
@@ -10,11 +9,10 @@ use ratatui::Frame;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::action::Action;
-use crate::components::Component;
 use crate::runtime::{delete_image, get_image, list_images, ImageSummary};
-use crate::utils::{centered_rect, table};
 
-use super::ComponentInit;
+use crate::components::{containers::Containers, image_inspect::ImageInspect, Component};
+use crate::utils::{centered_rect, table};
 
 const IMAGE_CONSTRAINTS: [Constraint; 4] = [
     Constraint::Max(15),
@@ -29,6 +27,7 @@ enum Popup {
     Delete(String, String),
 }
 
+#[derive(Clone, Debug)]
 pub struct Images {
     state: TableState,
     images: Vec<ImageSummary>,
@@ -145,22 +144,20 @@ impl Images {
             }
         });
     }
-}
 
-impl Component for Images {
-    fn get_name(&self) -> &'static str {
+    pub(crate) fn get_name(&self) -> &'static str {
         "Images"
     }
 
-    fn register_action_handler(&mut self, action_tx: UnboundedSender<Action>) {
+    pub(crate) fn register_action_handler(&mut self, action_tx: UnboundedSender<Action>) {
         self.action_tx = Some(action_tx);
     }
 
-    fn update(&mut self, action: Action) -> Result<()> {
+    pub(crate) async fn update(&mut self, action: Action) -> Result<()> {
         let tx = self.action_tx.clone().expect("No action sender available");
         match action {
             Action::Tick => {
-                self.images = block_on(list_images(&self.filter))?;
+                self.images = list_images(&self.filter).await?;
                 self.sort();
                 if self.state.selected().is_none() {
                     self.state.select(Some(0));
@@ -176,10 +173,10 @@ impl Component for Images {
                 if let Some(info) = self.get_selected_image_info() {
                     let id = info.0.to_string();
                     let name = info.1.to_string();
-                    let action = match block_on(get_image(&id)) {
-                        Ok(details) => {
-                            Action::Screen(super::ComponentInit::ImageInspect(id, name, details))
-                        }
+                    let action = match get_image(&id).await {
+                        Ok(details) => Action::Screen(Component::ImageInspect(ImageInspect::new(
+                            id, name, details,
+                        ))),
                         Err(e) => Action::Error(format!(
                             "Unable to get image \"{}\" details:\n{}",
                             name, e
@@ -198,7 +195,7 @@ impl Component for Images {
             }
             Action::Ok => {
                 if let Popup::Delete(id, _) = &self.show_popup.clone() {
-                    if let Err(e) = block_on(delete_image(id)) {
+                    if let Err(e) = delete_image(id).await {
                         tx.send(Action::Error(format!(
                             "Unable to delete container \"{}\" {}",
                             id, e
@@ -230,7 +227,7 @@ impl Component for Images {
         Ok(())
     }
 
-    fn draw(&mut self, f: &mut Frame<'_>, area: Rect) {
+    pub(crate) fn draw(&mut self, f: &mut Frame<'_>, area: Rect) {
         let rects = Layout::default()
             .constraints([Constraint::Percentage(100)])
             .split(area);
@@ -252,7 +249,7 @@ impl Component for Images {
         self.draw_popup(f);
     }
 
-    fn get_bindings(&self) -> Option<&[(&str, &str)]> {
+    pub(crate) fn get_bindings(&self) -> Option<&[(&str, &str)]> {
         Some(&[
             ("ctrl+d", "Delete"),
             ("i", "Inspect/View details"),
@@ -264,10 +261,12 @@ impl Component for Images {
         ])
     }
 
-    fn get_action(&self, k: &crossterm::event::KeyEvent) -> Option<Action> {
+    pub(crate) fn get_action(&self, k: &crossterm::event::KeyEvent) -> Option<Action> {
         if let KeyCode::Char('c') = k.code {
             if let Some((id, _)) = self.get_selected_image_info() {
-                Some(Action::Screen(ComponentInit::Containers(Some(id))))
+                Some(Action::Screen(Component::Containers(Containers::new(
+                    Some(id),
+                ))))
             } else {
                 None
             }
@@ -276,7 +275,7 @@ impl Component for Images {
         }
     }
 
-    fn has_filter(&self) -> bool {
+    pub(crate) fn has_filter(&self) -> bool {
         true
     }
 }

@@ -21,17 +21,15 @@ use ratatui::{
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
-use crate::{
-    action::Action,
-    components::{Component, ComponentInit},
-    runtime::get_container_logs,
-};
+use crate::components::{containers::Containers, Component};
+use crate::{action::Action, runtime::get_container_logs};
 
+#[derive(Clone, Debug)]
 pub struct ContainerLogs {
     id: String,
     name: String,
     logs: Arc<Mutex<Vec<String>>>,
-    task: JoinHandle<Result<()>>,
+    task: Arc<JoinHandle<Result<()>>>,
     cancellation_token: CancellationToken,
     vertical_scroll_state: ScrollbarState,
     vertical_scroll: usize,
@@ -86,13 +84,19 @@ impl ContainerLogs {
 
         let since = 15;
 
-        let task = spawn(run_setup_task(id.clone(), follow, since, _logs, _cancel));
+        let task = Arc::new(spawn(run_setup_task(
+            id.clone(),
+            follow,
+            since,
+            _logs,
+            _cancel,
+        )));
 
         ContainerLogs {
             id,
             name,
             logs,
-            task,
+            task: Arc::clone(&task),
             cancellation_token: cancel,
             vertical_scroll_state: Default::default(),
             vertical_scroll: 0,
@@ -118,23 +122,21 @@ impl ContainerLogs {
         self.task.abort();
         Ok(())
     }
-}
 
-impl Component for ContainerLogs {
-    fn get_name(&self) -> &'static str {
+    pub(crate) fn get_name(&self) -> &'static str {
         "ContainerLogs"
     }
 
-    fn register_action_handler(&mut self, action_tx: UnboundedSender<Action>) {
+    pub(crate) fn register_action_handler(&mut self, action_tx: UnboundedSender<Action>) {
         self.action_tx = Some(action_tx);
     }
 
-    fn update(&mut self, action: Action) -> Result<()> {
+    pub(crate) async fn update(&mut self, action: Action) -> Result<()> {
         let tx = self.action_tx.clone().expect("No action sender");
         match action {
             Action::PreviousScreen => {
                 self.cancel()?;
-                tx.send(Action::Screen(ComponentInit::Containers(None)))?;
+                tx.send(Action::Screen(Component::Containers(Containers::new(None))))?;
             }
             Action::Up => {
                 self.auto_scroll = false;
@@ -155,22 +157,22 @@ impl Component for ContainerLogs {
             Action::Since(n) => {
                 log::debug!("****** Since {}", n);
                 self.cancel()?;
-                block_on(self.logs.lock()).clear();
+                self.logs.lock().await.clear();
 
                 let cancel = CancellationToken::new();
                 let _cancel = cancel.clone();
 
                 let _logs = Arc::clone(&self.logs);
 
-                let task = spawn(run_setup_task(
+                let task = Arc::new(spawn(run_setup_task(
                     self.id.clone(),
                     self.follow,
                     n.into(),
                     _logs,
                     _cancel,
-                ));
+                )));
 
-                self.task = task;
+                self.task = Arc::clone(&task);
                 self.cancellation_token = cancel;
                 self.since = n as i64;
             }
@@ -182,7 +184,11 @@ impl Component for ContainerLogs {
         Ok(())
     }
 
-    fn draw(&mut self, f: &mut ratatui::prelude::Frame<'_>, area: ratatui::prelude::Rect) {
+    pub(crate) fn draw(
+        &mut self,
+        f: &mut ratatui::prelude::Frame<'_>,
+        area: ratatui::prelude::Rect,
+    ) {
         let rects = Layout::default()
             .constraints([Constraint::Max(1), Constraint::Min(20)])
             .split(area);
@@ -226,7 +232,7 @@ impl Component for ContainerLogs {
         f.render_widget(log_paragraph, rects[1]);
     }
 
-    fn get_bindings(&self) -> Option<&[(&str, &str)]> {
+    pub(crate) fn get_bindings(&self) -> Option<&[(&str, &str)]> {
         Some(&[
             ("s", "Autoscroll"),
             ("1", "Since 1m"),
@@ -237,7 +243,7 @@ impl Component for ContainerLogs {
         ])
     }
 
-    fn get_action(&self, k: &event::KeyEvent) -> Option<Action> {
+    pub(crate) fn get_action(&self, k: &event::KeyEvent) -> Option<Action> {
         match k.code {
             KeyCode::Char('s') => Some(Action::AutoScroll),
             KeyCode::Char('1') => Some(Action::Since(1)),

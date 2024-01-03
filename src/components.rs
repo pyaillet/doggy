@@ -31,50 +31,98 @@ pub mod volume_inspect;
 pub mod volumes;
 
 #[derive(Clone, Debug)]
-pub(crate) enum ComponentInit {
-    Containers(Option<String>),
-    ContainerExec(String, String, Option<String>),
-    ContainerInspect(String, String, String),
-    ContainerLogs(String, String),
-    Images,
-    ImageInspect(String, String, String),
-    Networks,
-    NetworkInspect(String, String, String),
-    Volumes,
-    VolumeInspect(String, String),
+pub(crate) enum Component {
+    Containers(Containers),
+    ContainerExec(ContainerExec),
+    ContainerInspect(ContainerDetails),
+    ContainerLogs(ContainerLogs),
+    Images(Images),
+    ImageInspect(ImageInspect),
+    Networks(Networks),
+    NetworkInspect(NetworkInspect),
+    Volumes(Volumes),
+    VolumeInspect(VolumeInspect),
 }
 
-impl ComponentInit {
-    pub fn get_component(self) -> Box<dyn Component> {
-        match self {
-            ComponentInit::Containers(filter) => Box::new(Containers::new(filter)),
-            ComponentInit::ContainerExec(id, cname, cmd) => {
-                Box::new(ContainerExec::new(id, cname, cmd))
-            }
-            ComponentInit::ContainerInspect(id, name, details) => {
-                Box::new(ContainerDetails::new(id, name, details))
-            }
-            ComponentInit::ContainerLogs(id, name) => Box::new(ContainerLogs::new(id, name)),
-            ComponentInit::Images => Box::new(Images::new()),
-            ComponentInit::ImageInspect(id, name, details) => {
-                Box::new(ImageInspect::new(id, name, details))
-            }
-            ComponentInit::Networks => Box::new(Networks::new()),
-            ComponentInit::NetworkInspect(id, name, details) => {
-                Box::new(NetworkInspect::new(id, name, details))
-            }
-            ComponentInit::Volumes => Box::new(Volumes::new()),
-            ComponentInit::VolumeInspect(id, details) => Box::new(VolumeInspect::new(id, details)),
+macro_rules! component_delegate {
+    ($self:ident.$func:ident$args:tt, [$($member:tt),+]) => {
+        match $self {
+            $(Component::$member(c) => c.$func$args,)+
         }
-    }
+    };
+    ($self:ident.$func:ident$args:tt, [$($member:tt),+], $def:expr) => {
+        match $self {
+            $(Component::$member(c) => c.$func$args,)+
+            _ => $def
+        }
+    };
+    ($self:ident.$func:ident$args:tt.await, [$($member:tt),+]) => {
+        match $self {
+            $(Component::$member(c) => c.$func$args.await,)+
+        }
+    };
+    ($self:ident.$func:ident$args:tt.await, [$($member:tt),+], $def:expr) => {
+        match $self {
+            $(Component::$member(c) => c.$func$args.await,)+
+            _ => $def
+        }
+    };
 }
 
-pub(crate) trait Component {
-    fn get_name(&self) -> &'static str;
+impl Component {
+    pub(crate) fn get_name(&self) -> &'static str {
+        component_delegate!(
+            self.get_name(),
+            [
+                Containers,
+                ContainerExec,
+                ContainerInspect,
+                ContainerLogs,
+                Images,
+                ImageInspect,
+                Networks,
+                NetworkInspect,
+                Volumes,
+                VolumeInspect
+            ]
+        )
+    }
 
-    fn register_action_handler(&mut self, _action_tx: UnboundedSender<Action>) {}
+    pub(crate) fn register_action_handler(&mut self, action_tx: UnboundedSender<Action>) {
+        component_delegate!(
+            self.register_action_handler(action_tx),
+            [
+                Containers,
+                ContainerExec,
+                ContainerInspect,
+                ContainerLogs,
+                Images,
+                ImageInspect,
+                Networks,
+                NetworkInspect,
+                Volumes,
+                VolumeInspect
+            ]
+        )
+    }
 
-    fn update(&mut self, action: Action) -> Result<()>;
+    pub(crate) async fn update(&mut self, action: Action) -> Result<()> {
+        component_delegate!(
+            self.update(action).await,
+            [
+                Containers,
+                ContainerExec,
+                ContainerInspect,
+                ContainerLogs,
+                Images,
+                ImageInspect,
+                Networks,
+                NetworkInspect,
+                Volumes,
+                VolumeInspect
+            ]
+        )
+    }
 
     /// Render the component on the screen. (REQUIRED)
     ///
@@ -86,28 +134,59 @@ pub(crate) trait Component {
     /// # Returns
     ///
     /// * `Result<()>` - An Ok result or an error.
-    fn draw(&mut self, f: &mut Frame<'_>, area: Rect);
-
-    fn setup(&mut self, _t: &mut tui::Tui) -> Result<()> {
-        Ok(())
-    }
-    fn teardown(&mut self, _t: &mut tui::Tui) -> Result<()> {
-        Ok(())
-    }
-
-    fn handle_input(&mut self, kevent: event::KeyEvent) -> Result<Option<event::KeyEvent>> {
-        Ok(Some(kevent))
-    }
-
-    fn get_bindings(&self) -> Option<&[(&str, &str)]> {
-        None
-    }
-
-    fn get_action(&self, _k: &KeyEvent) -> Option<Action> {
-        None
+    pub(crate) fn draw(&mut self, f: &mut Frame<'_>, area: Rect) {
+        component_delegate!(
+            self.draw(f, area),
+            [
+                Containers,
+                ContainerInspect,
+                ContainerLogs,
+                Images,
+                ImageInspect,
+                Networks,
+                NetworkInspect,
+                Volumes,
+                VolumeInspect
+            ],
+            {}
+        )
     }
 
-    fn has_filter(&self) -> bool {
-        false
+    pub(crate) fn setup(&mut self, t: &mut tui::Tui) -> Result<()> {
+        component_delegate!(self.setup(t), [ContainerExec], Ok(()))
+    }
+    pub(crate) fn teardown(&mut self, t: &mut tui::Tui) -> Result<()> {
+        component_delegate!(self.teardown(t), [ContainerExec], Ok(()))
+    }
+
+    pub(crate) fn handle_input(
+        &mut self,
+        kevent: event::KeyEvent,
+    ) -> Result<Option<event::KeyEvent>> {
+        component_delegate!(self.handle_input(kevent), [Containers], Ok(Some(kevent)))
+    }
+
+    pub(crate) fn get_bindings(&self) -> Option<&[(&str, &str)]> {
+        component_delegate!(
+            self.get_bindings(),
+            [Containers, ContainerLogs, Images, Networks, Volumes],
+            None
+        )
+    }
+
+    pub(crate) fn get_action(&self, k: &KeyEvent) -> Option<Action> {
+        component_delegate!(
+            self.get_action(k),
+            [Containers, ContainerLogs, Images],
+            None
+        )
+    }
+
+    pub(crate) fn has_filter(&self) -> bool {
+        component_delegate!(
+            self.has_filter(),
+            [Containers, Images, Networks, Volumes],
+            false
+        )
     }
 }

@@ -6,7 +6,10 @@ use tokio::sync::mpsc::{self, UnboundedSender};
 
 use crate::action::Action;
 use crate::components::containers::Containers;
-use crate::components::{Component, ComponentInit};
+use crate::components::images::Images;
+use crate::components::networks::Networks;
+use crate::components::volumes::Volumes;
+use crate::components::Component;
 use crate::tui;
 use crate::utils::{default_layout, help_screen, toast};
 
@@ -72,7 +75,7 @@ impl App {
         tui.frame_rate(self.frame_rate);
         tui.enter()?;
 
-        let mut main: Box<dyn Component> = Box::new(Containers::new(None));
+        let mut main: Component = Component::Containers(Containers::new(None));
         main.register_action_handler(action_tx.clone());
 
         loop {
@@ -87,7 +90,7 @@ impl App {
                         }
                         InputMode::None => {
                             if let Some(kevent) = main.handle_input(kevent)? {
-                                self.handle_key(main.as_ref(), kevent, action_tx.clone())?;
+                                self.handle_key(&main, kevent, action_tx.clone())?;
                             }
                         }
                     },
@@ -121,7 +124,7 @@ impl App {
                         }
                     }
                     Action::Screen(ref screen) => {
-                        let mut new_main = screen.clone().get_component();
+                        let mut new_main = screen.clone();
                         new_main.register_action_handler(action_tx.clone());
                         main.teardown(&mut tui)?;
                         new_main.setup(&mut tui)?;
@@ -157,7 +160,7 @@ impl App {
                     _ => {}
                 };
                 if let InputMode::None = self.input_mode {
-                    main.update(action.clone())?;
+                    main.update(action.clone()).await?;
                 }
             }
             if self.should_suspend {
@@ -179,13 +182,13 @@ impl App {
     fn draw(
         &mut self,
         tui: &mut tui::Tui,
-        main_component: &mut Box<dyn Component>,
+        main_component: &mut Component,
     ) -> Result<(), color_eyre::eyre::Error> {
         let main_layout = default_layout(tui.get_frame().size());
         tui.draw(|f| {
             self.draw_header(f, main_layout[0]);
             main_component.draw(f, main_layout[1]);
-            self.draw_popup(f, main_component.as_ref());
+            self.draw_popup(f, main_component);
             self.draw_status(f, main_layout[2]);
         })?;
         Ok(())
@@ -319,19 +322,19 @@ impl App {
             match self.suggestion {
                 Some(CONTAINERS) => {
                     self.reset_input();
-                    Some(Action::Screen(ComponentInit::Containers(None)))
+                    Some(Action::Screen(Component::Containers(Containers::new(None))))
                 }
                 Some(IMAGES) => {
                     self.reset_input();
-                    Some(Action::Screen(ComponentInit::Images))
+                    Some(Action::Screen(Component::Images(Images::new())))
                 }
                 Some(VOLUMES) => {
                     self.reset_input();
-                    Some(Action::Screen(ComponentInit::Volumes))
+                    Some(Action::Screen(Component::Volumes(Volumes::new())))
                 }
                 Some(NETWORKS) => {
                     self.reset_input();
-                    Some(Action::Screen(ComponentInit::Networks))
+                    Some(Action::Screen(Component::Networks(Networks::new())))
                 }
                 _ => None,
             }
@@ -360,7 +363,7 @@ impl App {
 
     fn handle_key(
         &self,
-        main: &(impl Component + ?Sized),
+        main: &Component,
         kevent: event::KeyEvent,
         action_tx: UnboundedSender<Action>,
     ) -> Result<()> {
@@ -402,7 +405,7 @@ impl App {
         Ok(())
     }
 
-    fn draw_popup(&mut self, f: &mut Frame<'_>, main_component: &(impl Component + ?Sized)) {
+    fn draw_popup(&mut self, f: &mut Frame<'_>, main_component: &Component) {
         match &mut self.show_popup {
             Popup::Error { msg, timeout, ttl } => {
                 let title = Span::styled("Error", Style::new().red());

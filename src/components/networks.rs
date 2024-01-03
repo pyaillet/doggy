@@ -1,6 +1,5 @@
 use color_eyre::Result;
 
-use futures::executor::block_on;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Span};
@@ -9,7 +8,7 @@ use ratatui::Frame;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::action::Action;
-use crate::components::Component;
+use crate::components::{network_inspect::NetworkInspect, Component};
 use crate::runtime::{delete_network, get_network, list_networks, NetworkSummary};
 use crate::utils::{centered_rect, table};
 
@@ -20,6 +19,7 @@ const NETWORK_CONSTRAINTS: [Constraint; 4] = [
     Constraint::Max(20),
 ];
 
+#[derive(Clone, Debug)]
 enum Popup {
     None,
     Delete(String),
@@ -39,6 +39,7 @@ pub enum SortColumn {
     Age(SortOrder),
 }
 
+#[derive(Clone, Debug)]
 pub struct Networks {
     state: TableState,
     networks: Vec<NetworkSummary>,
@@ -141,21 +142,19 @@ impl Networks {
             }
         });
     }
-}
 
-impl Component for Networks {
-    fn get_name(&self) -> &'static str {
+    pub(crate) fn get_name(&self) -> &'static str {
         "Networks"
     }
 
-    fn register_action_handler(&mut self, action_tx: UnboundedSender<Action>) {
+    pub(crate) fn register_action_handler(&mut self, action_tx: UnboundedSender<Action>) {
         self.action_tx = Some(action_tx);
     }
 
-    fn update(&mut self, action: Action) -> Result<()> {
+    pub(crate) async fn update(&mut self, action: Action) -> Result<()> {
         let tx = self.action_tx.clone().expect("No action sender available");
         match action {
-            Action::Tick => match block_on(list_networks(&self.filter)) {
+            Action::Tick => match list_networks(&self.filter).await {
                 Ok(networks) => {
                     self.networks = networks;
                     self.sort();
@@ -179,10 +178,10 @@ impl Component for Networks {
                 if let Some(info) = self.get_selected_network_info() {
                     let id = info.0.to_string();
                     let name = info.1.to_string();
-                    let action = match block_on(get_network(&name)) {
-                        Ok(details) => {
-                            Action::Screen(super::ComponentInit::NetworkInspect(id, name, details))
-                        }
+                    let action = match get_network(&name).await {
+                        Ok(details) => Action::Screen(Component::NetworkInspect(
+                            NetworkInspect::new(id, name, details),
+                        )),
                         Err(e) => Action::Error(format!(
                             "Unable to get network \"{}\" details:\n{}",
                             name, e
@@ -201,7 +200,7 @@ impl Component for Networks {
             }
             Action::Ok => {
                 if let Popup::Delete(id) = &self.show_popup {
-                    if let Err(e) = block_on(delete_network(id)) {
+                    if let Err(e) = delete_network(id).await {
                         tx.send(Action::Error(format!(
                             "Unable to delete network \"{}\":\n{}",
                             id, e
@@ -232,7 +231,7 @@ impl Component for Networks {
         Ok(())
     }
 
-    fn draw(&mut self, f: &mut Frame<'_>, area: Rect) {
+    pub(crate) fn draw(&mut self, f: &mut Frame<'_>, area: Rect) {
         let rects = Layout::default()
             .constraints([Constraint::Percentage(100)])
             .split(area);
@@ -254,7 +253,7 @@ impl Component for Networks {
         self.draw_popup(f);
     }
 
-    fn get_bindings(&self) -> Option<&[(&str, &str)]> {
+    pub(crate) fn get_bindings(&self) -> Option<&[(&str, &str)]> {
         Some(&[
             ("ctrl+d", "Delete"),
             ("i", "Inspect/View details"),
@@ -265,7 +264,7 @@ impl Component for Networks {
         ])
     }
 
-    fn has_filter(&self) -> bool {
+    pub(crate) fn has_filter(&self) -> bool {
         true
     }
 }

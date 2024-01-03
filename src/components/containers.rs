@@ -1,7 +1,6 @@
 use color_eyre::Result;
 
 use crossterm::event::{self, KeyCode, KeyEventKind};
-use futures::executor::block_on;
 use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Style, Stylize},
@@ -11,14 +10,14 @@ use ratatui::{
 };
 use tokio::sync::mpsc::UnboundedSender;
 
+use crate::runtime::{delete_container, get_container, list_containers};
 use crate::{action::Action, utils::centered_rect};
-use crate::{
-    components::Component,
-    runtime::{delete_container, get_container, list_containers},
-};
 use crate::{runtime::ContainerSummary, utils::table};
 
-use super::ComponentInit;
+use crate::components::{
+    container_exec::ContainerExec, container_inspect::ContainerDetails,
+    container_logs::ContainerLogs, Component,
+};
 
 const CONTAINER_CONSTRAINTS: [Constraint; 4] = [
     Constraint::Min(14),
@@ -66,6 +65,7 @@ pub enum SortColumn {
     Status(SortOrder),
 }
 
+#[derive(Clone, Debug)]
 pub struct Containers {
     all: bool,
     state: TableState,
@@ -249,25 +249,23 @@ impl Containers {
             }
         });
     }
-}
 
-impl Component for Containers {
-    fn get_name(&self) -> &'static str {
+    pub(crate) fn get_name(&self) -> &'static str {
         "Containers"
     }
 
-    fn register_action_handler(&mut self, tx: UnboundedSender<Action>) {
+    pub(crate) fn register_action_handler(&mut self, tx: UnboundedSender<Action>) {
         self.action_tx = Some(tx);
     }
 
-    fn update(&mut self, action: Action) -> Result<()> {
+    pub(crate) async fn update(&mut self, action: Action) -> Result<()> {
         let tx = self
             .action_tx
             .clone()
             .expect("Action tx queue not initialized");
         match (action, self.show_popup.clone()) {
             (Action::Tick, Popup::None) => {
-                self.containers = match block_on(list_containers(self.all, &self.filter)) {
+                self.containers = match list_containers(self.all, &self.filter).await {
                     Ok(containers) => containers,
                     Err(e) => {
                         tx.send(Action::Error(format!(
@@ -298,10 +296,10 @@ impl Component for Containers {
                 if let Some(cinfo) = self.get_selected_container_info() {
                     let cid = cinfo.0.to_string();
                     let cname = cinfo.1.to_string();
-                    let action = match block_on(get_container(&cid)) {
-                        Ok(details) => {
-                            Action::Screen(ComponentInit::ContainerInspect(cid, cname, details))
-                        }
+                    let action = match get_container(&cid).await {
+                        Ok(details) => Action::Screen(Component::ContainerInspect(
+                            ContainerDetails::new(cid, cname, details),
+                        )),
                         Err(e) => Action::Error(format!(
                             "Unable to get container \"{}\" details:\n{}",
                             cname, e
@@ -314,12 +312,16 @@ impl Component for Containers {
                 if let Some(cinfo) = self.get_selected_container_info() {
                     let cid = cinfo.0.to_string();
                     let cname = cinfo.1.to_string();
-                    tx.send(Action::Screen(ComponentInit::ContainerLogs(cid, cname)))?;
+                    tx.send(Action::Screen(Component::ContainerLogs(
+                        ContainerLogs::new(cid, cname),
+                    )))?;
                 }
             }
             (Action::Shell, Popup::None) => {
                 if let Some(action) = self.get_selected_container_info().map(|cinfo| {
-                    Action::Screen(ComponentInit::ContainerExec(cinfo.0, cinfo.1, None))
+                    Action::Screen(Component::ContainerExec(ContainerExec::new(
+                        cinfo.0, cinfo.1, None,
+                    )))
                 }) {
                     tx.send(Action::Suspend)?;
                     tx.send(action)?;
@@ -336,7 +338,7 @@ impl Component for Containers {
                 }
             }
             (Action::Ok, Popup::Delete(cid, _)) => {
-                if let Err(e) = block_on(delete_container(&cid)) {
+                if let Err(e) = delete_container(&cid).await {
                     tx.send(Action::Error(format!(
                         "Unable to delete container \"{}\" {}",
                         cid, e
@@ -347,11 +349,11 @@ impl Component for Containers {
                 }
             }
             (Action::Ok, Popup::Shell(shell)) => {
-                let action = Action::Screen(ComponentInit::ContainerExec(
+                let action = Action::Screen(Component::ContainerExec(ContainerExec::new(
                     shell.cid,
                     shell.cname,
                     Some(shell.input),
-                ));
+                )));
                 tx.send(Action::Suspend)?;
                 tx.send(action)?;
             }
@@ -377,7 +379,7 @@ impl Component for Containers {
         Ok(())
     }
 
-    fn draw(&mut self, f: &mut Frame<'_>, area: Rect) {
+    pub(crate) fn draw(&mut self, f: &mut Frame<'_>, area: Rect) {
         let rects = Layout::default()
             .constraints([Constraint::Percentage(100)])
             .split(area);
@@ -404,7 +406,10 @@ impl Component for Containers {
         self.draw_popup(f);
     }
 
-    fn handle_input(&mut self, kevent: event::KeyEvent) -> Result<Option<event::KeyEvent>> {
+    pub(crate) fn handle_input(
+        &mut self,
+        kevent: event::KeyEvent,
+    ) -> Result<Option<event::KeyEvent>> {
         if let Popup::Shell(ref mut _shell_popup) = self.show_popup {
             if kevent.kind == KeyEventKind::Press {
                 match kevent.code {
@@ -438,7 +443,7 @@ impl Component for Containers {
         }
     }
 
-    fn get_bindings(&self) -> Option<&[(&str, &str)]> {
+    pub(crate) fn get_bindings(&self) -> Option<&[(&str, &str)]> {
         Some(&[
             ("ctrl+d", "Delete"),
             ("i", "Inspect"),
@@ -452,7 +457,7 @@ impl Component for Containers {
         ])
     }
 
-    fn get_action(&self, k: &event::KeyEvent) -> Option<Action> {
+    pub(crate) fn get_action(&self, k: &event::KeyEvent) -> Option<Action> {
         match k.code {
             KeyCode::Char('i') => Some(Action::Inspect),
             KeyCode::Char('l') => Some(Action::Logs),
@@ -462,7 +467,7 @@ impl Component for Containers {
         }
     }
 
-    fn has_filter(&self) -> bool {
+    pub(crate) fn has_filter(&self) -> bool {
         true
     }
 }
