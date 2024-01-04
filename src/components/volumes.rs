@@ -1,6 +1,5 @@
 use color_eyre::Result;
 
-use futures::executor::block_on;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Span};
@@ -9,7 +8,7 @@ use ratatui::Frame;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::action::Action;
-use crate::components::Component;
+use crate::components::{Component, VolumeInspect};
 use crate::runtime::{delete_volume, get_volume, list_volumes, VolumeSummary};
 use crate::utils::{centered_rect, table};
 
@@ -20,6 +19,7 @@ const VOLUME_CONSTRAINTS: [Constraint; 4] = [
     Constraint::Max(20),
 ];
 
+#[derive(Clone, Debug)]
 enum Popup {
     None,
     Delete(String),
@@ -39,6 +39,7 @@ pub enum SortColumn {
     Age(SortOrder),
 }
 
+#[derive(Clone, Debug)]
 pub struct Volumes {
     state: TableState,
     volumes: Vec<VolumeSummary>,
@@ -141,21 +142,19 @@ impl Volumes {
             }
         });
     }
-}
 
-impl Component for Volumes {
-    fn get_name(&self) -> &'static str {
+    pub(crate) fn get_name(&self) -> &'static str {
         "Volumes"
     }
 
-    fn register_action_handler(&mut self, action_tx: UnboundedSender<Action>) {
+    pub(crate) fn register_action_handler(&mut self, action_tx: UnboundedSender<Action>) {
         self.action_tx = Some(action_tx);
     }
 
-    fn update(&mut self, action: Action) -> Result<()> {
+    pub(crate) async fn update(&mut self, action: Action) -> Result<()> {
         let tx = self.action_tx.clone().expect("No action sender available");
         match action {
-            Action::Tick => match block_on(list_volumes()) {
+            Action::Tick => match list_volumes().await {
                 Ok(volumes) => {
                     self.volumes = volumes;
                     self.sort();
@@ -174,10 +173,10 @@ impl Component for Volumes {
             Action::Inspect => {
                 if let Some(info) = self.get_selected_volume_info() {
                     let id = info.to_string();
-                    let action = match block_on(get_volume(&id)) {
-                        Ok(details) => {
-                            Action::Screen(super::ComponentInit::VolumeInspect(id, details))
-                        }
+                    let action = match get_volume(&id).await {
+                        Ok(details) => Action::Screen(Component::VolumeInspect(
+                            VolumeInspect::new(id, details),
+                        )),
                         Err(e) => Action::Error(format!(
                             "Unable to get network \"{}\" details:\n{}",
                             &id[0..12],
@@ -197,7 +196,7 @@ impl Component for Volumes {
             }
             Action::Ok => {
                 if let Popup::Delete(id) = &self.show_popup {
-                    if let Err(e) = block_on(delete_volume(id)) {
+                    if let Err(e) = delete_volume(id).await {
                         tx.send(Action::Error(format!(
                             "Error deleting volume \"{}\":\n{}",
                             id, e
@@ -228,7 +227,7 @@ impl Component for Volumes {
         Ok(())
     }
 
-    fn draw(&mut self, f: &mut Frame<'_>, area: Rect) {
+    pub(crate) fn draw(&mut self, f: &mut Frame<'_>, area: Rect) {
         let rects = Layout::default()
             .constraints([Constraint::Percentage(100)])
             .split(area);
@@ -250,7 +249,7 @@ impl Component for Volumes {
         self.draw_popup(f);
     }
 
-    fn get_bindings(&self) -> Option<&[(&str, &str)]> {
+    pub(crate) fn get_bindings(&self) -> Option<&[(&str, &str)]> {
         Some(&[
             ("ctrl+d", "Delete"),
             ("i", "Inspect/View details"),
@@ -261,7 +260,7 @@ impl Component for Volumes {
         ])
     }
 
-    fn has_filter(&self) -> bool {
+    pub(crate) fn has_filter(&self) -> bool {
         true
     }
 }

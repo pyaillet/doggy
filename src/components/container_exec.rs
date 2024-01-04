@@ -7,10 +7,7 @@ use crossterm::cursor::{self, MoveTo};
 use crossterm::terminal::{Clear, ClearType};
 use crossterm::ExecutableCommand;
 
-use futures::executor::block_on;
 use futures::StreamExt;
-use ratatui::layout::Rect;
-use ratatui::Frame;
 use tokio::io::{stdin, AsyncReadExt, AsyncWriteExt};
 use tokio::select;
 use tokio::sync::mpsc::UnboundedSender;
@@ -18,12 +15,13 @@ use tokio::task::spawn;
 use tokio_util::sync::CancellationToken;
 
 use crate::action::Action;
-use crate::components::Component;
+use crate::components::{containers::Containers, Component};
 use crate::runtime::get_docker_connection;
 use crate::tui;
 
 const DEFAULT_CMD: &str = "/bin/bash";
 
+#[derive(Clone, Debug)]
 pub struct ContainerExec {
     cid: String,
     cname: String,
@@ -111,36 +109,34 @@ impl ContainerExec {
         }
         Ok(())
     }
-}
 
-impl Component for ContainerExec {
-    fn get_name(&self) -> &'static str {
+    pub(crate) fn get_name(&self) -> &'static str {
         "ContainerExec"
     }
 
-    fn register_action_handler(&mut self, action_tx: UnboundedSender<Action>) {
+    pub(crate) fn register_action_handler(&mut self, action_tx: UnboundedSender<Action>) {
         self.action_tx = Some(action_tx);
     }
 
-    fn setup(&mut self, t: &mut tui::Tui) -> Result<()> {
+    pub(crate) fn setup(&mut self, t: &mut tui::Tui) -> Result<()> {
         t.stop()?;
         Ok(())
     }
 
-    fn teardown(&mut self, t: &mut tui::Tui) -> Result<()> {
+    pub(crate) fn teardown(&mut self, t: &mut tui::Tui) -> Result<()> {
         t.clear()?;
         Ok(())
     }
 
-    fn update(&mut self, _action: Action) -> Result<()> {
+    pub(crate) async fn update(&mut self, _action: Action) -> Result<()> {
         let tx = self.action_tx.clone().expect("Unable to get event sender");
 
         if !self.should_stop {
-            let res = block_on(self.exec());
+            let res = self.exec().await;
 
             self.should_stop = true;
             tx.send(Action::Resume)?;
-            tx.send(Action::Screen(super::ComponentInit::Containers(None)))?;
+            tx.send(Action::Screen(Component::Containers(Containers::new(None))))?;
             if let Err(e) = res {
                 tx.send(Action::Error(format!(
                     "Unable to execute command \"{}\" in container \"{}\"\n{}",
@@ -150,6 +146,4 @@ impl Component for ContainerExec {
         }
         Ok(())
     }
-
-    fn draw(&mut self, _f: &mut Frame<'_>, _area: Rect) {}
 }

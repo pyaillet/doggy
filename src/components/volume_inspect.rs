@@ -6,8 +6,12 @@ use ratatui::{
 };
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::{action::Action, components::Component};
+use crate::{
+    action::Action,
+    components::{volumes::Volumes, Component},
+};
 
+#[derive(Clone, Debug)]
 pub struct VolumeInspect {
     id: String,
     details: String,
@@ -36,22 +40,20 @@ impl VolumeInspect {
         self.vertical_scroll = self.vertical_scroll.saturating_sub(qty);
         self.vertical_scroll_state = self.vertical_scroll_state.position(self.vertical_scroll);
     }
-}
 
-impl Component for VolumeInspect {
-    fn get_name(&self) -> &'static str {
+    pub(crate) fn get_name(&self) -> &'static str {
         "VolumeInspect"
     }
 
-    fn register_action_handler(&mut self, tx: UnboundedSender<Action>) {
+    pub(crate) fn register_action_handler(&mut self, tx: UnboundedSender<Action>) {
         self.action_tx = Some(tx);
     }
 
-    fn update(&mut self, action: Action) -> Result<()> {
+    pub(crate) async fn update(&mut self, action: Action) -> Result<()> {
         match action {
             Action::PreviousScreen => {
                 if let Some(tx) = self.action_tx.clone() {
-                    tx.send(Action::Screen(super::ComponentInit::Volumes))?;
+                    tx.send(Action::Screen(Component::Volumes(Volumes::new())))?;
                 }
             }
             Action::Up => {
@@ -71,7 +73,7 @@ impl Component for VolumeInspect {
         Ok(())
     }
 
-    fn draw(&mut self, f: &mut Frame<'_>, area: Rect) {
+    pub(crate) fn draw(&mut self, f: &mut Frame<'_>, area: Rect) {
         let volume_details = Paragraph::new(self.details.clone())
             .gray()
             .block(
