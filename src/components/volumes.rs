@@ -241,8 +241,9 @@ impl Volumes {
                 }
             ),
             ["Id", "Driver", "Size", "Age"],
-            self.volumes.iter().map(|v| (*v).clone().into()).collect(),
+            self.volumes.iter().map(|v| v.into()).collect(),
             &VOLUME_CONSTRAINTS,
+            Some(Style::new().gray()),
         );
         f.render_stateful_widget(t, rects[0], &mut self.state);
 
