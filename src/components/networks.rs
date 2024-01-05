@@ -245,8 +245,9 @@ impl Networks {
                 }
             ),
             ["Id", "Name", "Driver", "Age"],
-            self.networks.iter().map(|n| (*n).clone().into()).collect(),
+            self.networks.iter().map(|n| n.into()).collect(),
             &NETWORK_CONSTRAINTS,
+            Some(Style::new().gray()),
         );
         f.render_stateful_widget(t, rects[0], &mut self.state);
 

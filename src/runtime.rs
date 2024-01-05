@@ -16,6 +16,11 @@ use color_eyre::Result;
 use futures::{Stream, StreamExt};
 use humansize::{FormatSizeI, BINARY};
 
+use ratatui::{
+    style::{Style, Stylize},
+    text::Span,
+    widgets::Row,
+};
 use tracing::instrument;
 
 use crate::utils::get_or_not_found;
@@ -47,15 +52,20 @@ pub struct VolumeSummary {
     pub created: String,
 }
 
-impl From<VolumeSummary> for [String; 4] {
-    fn from(value: VolumeSummary) -> Self {
+impl<'a> From<&VolumeSummary> for Row<'a> {
+    fn from(value: &VolumeSummary) -> Row<'a> {
         let VolumeSummary {
             id,
             driver,
             size,
             created,
         } = value.clone();
-        [id, driver, size.format_size_i(BINARY), created]
+        Row::new(vec![
+            id.gray(),
+            driver.gray(),
+            size.format_size_i(BINARY).gray(),
+            created.gray(),
+        ])
     }
 }
 
@@ -103,15 +113,15 @@ pub struct NetworkSummary {
     pub created: String,
 }
 
-impl From<NetworkSummary> for [String; 4] {
-    fn from(value: NetworkSummary) -> Self {
+impl<'a> From<&NetworkSummary> for Row<'a> {
+    fn from(value: &NetworkSummary) -> Row<'a> {
         let NetworkSummary {
             id,
             name,
             driver,
             created,
         } = value.clone();
-        [id, name, driver, created]
+        Row::new(vec![id.gray(), name.gray(), driver.gray(), created.gray()])
     }
 }
 
@@ -164,22 +174,23 @@ pub struct ImageSummary {
     pub created: i64,
 }
 
-impl From<ImageSummary> for [String; 4] {
-    fn from(value: ImageSummary) -> Self {
+impl<'a> From<&ImageSummary> for Row<'a> {
+    fn from(value: &ImageSummary) -> Row<'a> {
         let ImageSummary {
             id,
             name,
             size,
             created,
         } = value.clone();
-        [
-            id,
-            name,
-            size.format_size_i(BINARY),
+        Row::new(vec![
+            id.gray(),
+            name.gray(),
+            size.format_size_i(BINARY).gray(),
             DateTime::<Utc>::from_timestamp(created, 0)
                 .expect("Unable to parse timestamp")
-                .to_string(),
-        ]
+                .to_string()
+                .gray(),
+        ])
     }
 }
 
@@ -236,26 +247,87 @@ pub(crate) async fn delete_container(cid: &str) -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub enum ContainerStatus {
+    Created,
+    Running,
+    Paused,
+    Restarting,
+    Removing,
+    Exited,
+    Dead,
+    Unknown,
+}
+
+impl<T> From<T> for ContainerStatus
+where
+    T: AsRef<str>,
+{
+    fn from(value: T) -> Self {
+        match value.as_ref() {
+            "created" => ContainerStatus::Created,
+            "running" => ContainerStatus::Running,
+            "paused" => ContainerStatus::Paused,
+            "restarting" => ContainerStatus::Restarting,
+            "removing" => ContainerStatus::Removing,
+            "exited" => ContainerStatus::Exited,
+            "dead" => ContainerStatus::Dead,
+            _ => ContainerStatus::Unknown,
+        }
+    }
+}
+
+impl From<ContainerStatus> for String {
+    fn from(value: ContainerStatus) -> Self {
+        match value {
+            ContainerStatus::Created => "created".into(),
+            ContainerStatus::Running => "running".into(),
+            ContainerStatus::Paused => "paused".into(),
+            ContainerStatus::Restarting => "restarting".into(),
+            ContainerStatus::Removing => "removing".into(),
+            ContainerStatus::Exited => "exited".into(),
+            ContainerStatus::Dead => "dead".into(),
+            ContainerStatus::Unknown => "unknown".into(),
+        }
+    }
+}
+
+impl ContainerStatus {
+    fn format(&self) -> Span<'static> {
+        match self {
+            ContainerStatus::Created => Span::styled("created", Style::new().dark_gray()),
+            ContainerStatus::Running => Span::styled("running", Style::new().green()),
+            ContainerStatus::Paused => Span::styled("paused", Style::new().dark_gray()),
+            ContainerStatus::Restarting => Span::styled("restarting", Style::new().yellow()),
+            ContainerStatus::Removing => Span::styled("removing", Style::new().red()),
+            ContainerStatus::Exited => Span::styled("exited", Style::new().red()),
+            ContainerStatus::Dead => Span::styled("dead", Style::new().red()),
+            ContainerStatus::Unknown => "unknown".into(),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ContainerSummary {
     pub id: String,
     pub name: String,
     pub image: String,
     pub image_id: String,
-    pub status: String,
+    pub status: ContainerStatus,
     pub age: i64,
 }
 
-impl From<ContainerSummary> for [String; 4] {
-    fn from(val: ContainerSummary) -> Self {
+impl<'a> From<&ContainerSummary> for Row<'a> {
+    fn from(value: &ContainerSummary) -> Row<'a> {
         let ContainerSummary {
             id,
             name,
             image,
             status,
             ..
-        } = val.clone();
-        [id, name, image, status]
+        } = value.clone();
+        Row::new(vec![id.gray(), name.gray(), image.gray(), status.format()])
     }
 }
 
@@ -280,7 +352,7 @@ pub(crate) async fn list_containers(
             name: get_or_not_found!(c.names, |c| c.first().and_then(|s| s.split('/').last())),
             image: get_or_not_found!(c.image, |i| i.split('@').next()),
             image_id: get_or_not_found!(c.image_id),
-            status: get_or_not_found!(c.state),
+            status: c.state.clone().unwrap_or("unknown".into()).into(),
             age: c.created.unwrap_or_default(),
         })
         .filter(|c| match filter {

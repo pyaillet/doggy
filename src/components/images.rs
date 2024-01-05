@@ -241,8 +241,9 @@ impl Images {
                 }
             ),
             ["Id", "Name", "Size", "Age"],
-            self.images.iter().map(|i| (*i).clone().into()).collect(),
+            self.images.iter().map(|i| i.into()).collect(),
             &IMAGE_CONSTRAINTS,
+            Some(Style::new().gray()),
         );
         f.render_stateful_widget(t, rects[0], &mut self.state);
 

@@ -395,11 +395,9 @@ impl Containers {
                 }
             ),
             ["Id", "Name", "Image", "Status"],
-            self.containers
-                .iter()
-                .map(|c| (*c).clone().into())
-                .collect(),
+            self.containers.iter().map(|c| c.into()).collect(),
             &CONTAINER_CONSTRAINTS,
+            Some(Style::new().gray()),
         );
         f.render_stateful_widget(t, rects[0], &mut self.state);
 
