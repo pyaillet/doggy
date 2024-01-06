@@ -55,7 +55,7 @@ async fn run_setup_task(
         follow,
         ..Default::default()
     };
-    let mut stream = get_container_logs(&cid, options)?;
+    let mut stream = get_container_logs(&cid, options).await?;
     while !should_stop {
         select!(
         l = stream.next() => {

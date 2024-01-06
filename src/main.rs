@@ -19,6 +19,8 @@ async fn main() -> Result<()> {
 
     initialize_panic_handler()?;
 
+    runtime::init().await?;
+
     // create app and run it
     let mut app = App::new(GIT_COMMIT_HASH, DEFAULT_TICK_RATE, DEFAULT_FRAME_RATE);
     if let Err(e) = app.run().await {
