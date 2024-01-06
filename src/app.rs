@@ -10,6 +10,7 @@ use crate::components::images::Images;
 use crate::components::networks::Networks;
 use crate::components::volumes::Volumes;
 use crate::components::Component;
+use crate::runtime::{get_suggestions, CONTAINERS, IMAGES, NETWORKS, VOLUMES};
 use crate::tui;
 use crate::utils::{default_layout, help_screen, toast};
 
@@ -20,13 +21,6 @@ enum InputMode {
 }
 
 const DEFAULT_TOAST_DELAY: usize = 8;
-
-const CONTAINERS: &str = "containers";
-const IMAGES: &str = "images";
-const NETWORKS: &str = "networks";
-const VOLUMES: &str = "volumes";
-
-const SUGGESTIONS: [&str; 4] = [CONTAINERS, IMAGES, NETWORKS, VOLUMES];
 
 pub enum Popup {
     None,
@@ -86,7 +80,7 @@ impl App {
                     tui::Event::Resize(x, y) => action_tx.send(Action::Resize(x, y))?,
                     tui::Event::Key(kevent) => match self.input_mode {
                         InputMode::Change | InputMode::Filter => {
-                            self.handle_input(kevent, action_tx.clone())?;
+                            self.handle_input(kevent, action_tx.clone()).await?;
                         }
                         InputMode::None => {
                             if let Some(kevent) = main.handle_input(kevent)? {
@@ -278,7 +272,7 @@ impl App {
         self.cursor_position = 0;
     }
 
-    fn handle_input(
+    async fn handle_input(
         &mut self,
         kevent: event::KeyEvent,
         action_tx: UnboundedSender<Action>,
@@ -295,7 +289,7 @@ impl App {
                 },
                 KeyCode::Char(to_insert) => {
                     self.enter_char(to_insert);
-                    self.suggestion = self.update_suggestion();
+                    self.suggestion = self.update_suggestion().await;
                 }
                 KeyCode::Backspace => {
                     self.delete_char();
@@ -355,10 +349,12 @@ impl App {
         self.input_mode = InputMode::None;
     }
 
-    fn update_suggestion(&self) -> Option<&'static str> {
-        SUGGESTIONS
-            .into_iter()
+    async fn update_suggestion(&self) -> Option<&'static str> {
+        get_suggestions()
+            .await
+            .iter()
             .find(|searched| searched.starts_with(&self.input))
+            .copied()
     }
 
     fn handle_key(

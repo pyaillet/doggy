@@ -35,6 +35,10 @@ tracing = "0.1.37"
 tracing-error = "0.2.0"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter", "serde"] }
 
+k8s-cri = { version = "0.7", optional = true }
+tonic = { version = "0.9", optional = true }
+tower = { version = "0.4", optional = true }
+
 bollard = { version = "0.15", features = ["ssl"], optional = true }
 
 # Implements the types defined in the Otel spec
@@ -47,5 +51,6 @@ opentelemetry-jaeger = { version = "0.16.0", optional = true }
 [features]
 default = ["docker"]
 docker = ["dep:bollard"]
+cri = ["dep:k8s-cri", "dep:tonic", "dep:tower"]
 otel = ["tokio/tracing", "dep:opentelemetry", "dep:tracing-opentelemetry", "dep:opentelemetry-jaeger"]
 
