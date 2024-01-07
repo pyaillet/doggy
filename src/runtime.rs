@@ -8,10 +8,10 @@ use bollard::container::{LogOutput, LogsOptions};
 use color_eyre::Result;
 
 #[cfg(feature = "cri")]
-mod cri;
+pub mod cri;
 #[cfg(feature = "docker")]
-mod docker;
-mod model;
+pub mod docker;
+pub mod model;
 
 use futures::Stream;
 pub use model::*;
@@ -49,6 +49,17 @@ impl Display for NotInitialized {
 
 impl Error for NotInitialized {}
 
+#[derive(Clone, Debug)]
+struct NoConfigurationFound {}
+
+impl Display for NoConfigurationFound {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("No configuration found for runtime")
+    }
+}
+
+impl Error for NoConfigurationFound {}
+
 pub enum ConnectionConfig {
     #[cfg(feature = "docker")]
     Docker(docker::ConnectionConfig),
@@ -71,8 +82,7 @@ pub enum Client {
 }
 
 #[cfg(feature = "docker")]
-async fn init_docker() -> Result<()> {
-    let config = docker::detect_connection_config();
+async fn init_docker(config: docker::ConnectionConfig) -> Result<()> {
     let client = docker::connect(&config)?;
 
     let config = ConnectionConfig::Docker(config);
@@ -88,8 +98,7 @@ async fn init_docker() -> Result<()> {
 }
 
 #[cfg(feature = "cri")]
-async fn init_cri() -> Result<()> {
-    let config = cri::detect_connection_config().expect("Unable to connect to containerd");
+async fn init_cri(config: cri::ConnectionConfig) -> Result<()> {
     let client = cri::connect(&config).await?;
 
     let config = ConnectionConfig::Cri(config);
@@ -104,14 +113,16 @@ async fn init_cri() -> Result<()> {
     Ok(())
 }
 
-pub async fn init() -> Result<()> {
-    #[cfg(feature = "cri")]
-    init_cri().await?;
+pub async fn init(config: Option<ConnectionConfig>) -> Result<()> {
+    let config = config
+        .or_else(|| docker::detect_connection_config().map(ConnectionConfig::Docker))
+        .or_else(|| cri::detect_connection_config().map(ConnectionConfig::Cri));
 
-    #[cfg(feature = "docker")]
-    init_docker().await?;
-
-    Ok(())
+    match config {
+        Some(ConnectionConfig::Cri(c)) => init_cri(c).await,
+        Some(ConnectionConfig::Docker(c)) => init_docker(c).await,
+        None => Err(NoConfigurationFound {}.into()),
+    }
 }
 
 pub(crate) async fn list_volumes() -> Result<Vec<VolumeSummary>> {
@@ -298,6 +309,19 @@ pub(crate) async fn container_exec(cid: &str, cmd: &str) -> Result<()> {
             Client::Docker(client) => client.container_exec(cid, cmd).await,
             #[cfg(feature = "cri")]
             _ => unimplemented!(),
+        },
+        _ => Err(NotInitialized {}.into()),
+    }
+}
+
+pub(crate) async fn get_runtime_info() -> Result<String> {
+    let mut client = CLIENT.lock().await;
+    match *client {
+        Some(ref mut conn) => match &mut conn.client {
+            #[cfg(feature = "docker")]
+            Client::Docker(client) => client.info().await,
+            #[cfg(feature = "cri")]
+            Client::Cri(client) => client.info().await,
         },
         _ => Err(NotInitialized {}.into()),
     }

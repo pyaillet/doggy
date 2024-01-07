@@ -43,6 +43,7 @@ pub struct App {
     frame_rate: f64,
     tick_rate: f64,
     show_popup: Popup,
+    runtime_info: Option<String>,
 }
 
 impl App {
@@ -58,6 +59,7 @@ impl App {
             frame_rate,
             tick_rate,
             show_popup: Popup::None,
+            runtime_info: None,
         }
     }
 
@@ -71,6 +73,9 @@ impl App {
 
         let mut main: Component = Component::Containers(Containers::new(None));
         main.register_action_handler(action_tx.clone());
+
+        let info = crate::runtime::get_runtime_info().await?;
+        self.runtime_info = Some(info);
 
         loop {
             if let Some(event) = tui.next().await {
@@ -191,7 +196,12 @@ impl App {
     fn draw_header(&self, f: &mut ratatui::prelude::Frame<'_>, rect: ratatui::prelude::Rect) {
         match self.input_mode {
             InputMode::None => {
-                let p = Paragraph::new("Welcome to Doggy!");
+                let text = if let Some(info) = &self.runtime_info {
+                    vec![Span::from("Welcome to Doggy"), Span::from(info.clone())]
+                } else {
+                    vec![Span::from("Welcome to Doggy")]
+                };
+                let p = Paragraph::new(Line::from(text));
                 f.render_widget(p, rect)
             }
             InputMode::Change => {

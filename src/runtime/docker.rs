@@ -1,4 +1,4 @@
-use std::{env, io::Write, path::PathBuf};
+use std::{env, fs, io::Write, path::PathBuf};
 
 use bollard::{
     container::{
@@ -30,6 +30,7 @@ use crate::utils::get_or_not_found;
 use super::{ContainerSummary, ImageSummary, NetworkSummary, VolumeSummary};
 
 const DEFAULT_TIMEOUT: u64 = 120;
+const DEFAULT_SOCKET_PATH: &str = "/var/run/docker/docker.sock";
 
 pub enum ConnectionConfig {
     Ssl(String, String),
@@ -37,21 +38,43 @@ pub enum ConnectionConfig {
     Socket(Option<String>),
 }
 
-pub fn detect_connection_config() -> ConnectionConfig {
+#[allow(dead_code)]
+impl ConnectionConfig {
+    pub fn default_socket() -> Self {
+        ConnectionConfig::Socket(None)
+    }
+
+    pub fn socket(path: String) -> Self {
+        ConnectionConfig::Socket(Some(path))
+    }
+
+    pub fn http(address: String) -> Self {
+        ConnectionConfig::Http(address)
+    }
+
+    pub fn ssl(address: String, certs_path: String) -> Self {
+        ConnectionConfig::Ssl(address, certs_path)
+    }
+}
+
+pub fn detect_connection_config() -> Option<ConnectionConfig> {
     let docker_host = env::var("DOCKER_HOST");
     let docker_cert = env::var("DOCKER_CERT_PATH");
     match (docker_host, docker_cert) {
         (Ok(host), Ok(certs)) => {
             log::debug!("Connect with ssl");
-            ConnectionConfig::Ssl(host, certs)
+            Some(ConnectionConfig::Ssl(host, certs))
         }
         (Ok(host), Err(_)) => {
             log::debug!("Connect with http");
-            ConnectionConfig::Http(host)
+            Some(ConnectionConfig::Http(host))
         }
         _ => {
             log::debug!("Connect with socket");
-            ConnectionConfig::Socket(None)
+            match fs::metadata(DEFAULT_SOCKET_PATH) {
+                Ok(_) => Some(ConnectionConfig::default_socket()),
+                Err(_) => None,
+            }
         }
     }
 }
@@ -302,6 +325,11 @@ impl Client {
             handle.await?;
         }
         Ok(())
+    }
+
+    pub(crate) async fn info(&self) -> Result<String> {
+        let info = self.client.info().await?;
+        Ok(format!("{:?}", info))
     }
 }
 

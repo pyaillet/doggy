@@ -5,7 +5,7 @@ use color_eyre::Result;
 use k8s_cri::v1::{
     image_service_client::ImageServiceClient, runtime_service_client::RuntimeServiceClient,
     ContainerStatusRequest, ImageSpec, ImageStatusRequest, ListContainersRequest,
-    ListImagesRequest, RemoveContainerRequest, RemoveImageRequest,
+    ListImagesRequest, RemoveContainerRequest, RemoveImageRequest, StatusRequest, VersionRequest,
 };
 
 use tokio::net::UnixStream;
@@ -46,7 +46,17 @@ impl From<ContainerState> for super::ContainerStatus {
 }
 
 pub enum ConnectionConfig {
-    Socket,
+    Socket(Option<String>),
+}
+
+impl ConnectionConfig {
+    pub fn default_socket() -> Self {
+        ConnectionConfig::Socket(None)
+    }
+
+    pub fn socket(path: String) -> Self {
+        ConnectionConfig::Socket(Some(path))
+    }
 }
 
 pub struct Client {
@@ -56,29 +66,33 @@ pub struct Client {
 
 pub fn detect_connection_config() -> Option<ConnectionConfig> {
     match fs::metadata(SOCKET_PATH) {
-        Ok(_) => Some(ConnectionConfig::Socket),
+        Ok(_) => Some(ConnectionConfig::default_socket()),
         Err(_) => None,
     }
 }
 
 pub(crate) async fn connect(config: &ConnectionConfig) -> Result<Client> {
-    match config {
-        ConnectionConfig::Socket => {
-            let channel = Endpoint::try_from("http://[::]")
-                .unwrap()
-                .connect_with_connector(service_fn(move |_: Uri| UnixStream::connect(SOCKET_PATH)))
-                .await
-                .expect("Could not create client.");
+    let socket_path = match config {
+        ConnectionConfig::Socket(None) => SOCKET_PATH.to_string(),
+        ConnectionConfig::Socket(Some(path)) => path.to_string(),
+    };
 
-            let runtime_client = RuntimeServiceClient::new(channel.clone());
-            let image_client = ImageServiceClient::new(channel);
+    let channel = Endpoint::try_from("http://[::]")
+        .unwrap()
+        .connect_with_connector(service_fn(move |_: Uri| {
+            let socket_path = socket_path.to_string();
+            UnixStream::connect(socket_path)
+        }))
+        .await
+        .expect("Could not create client.");
 
-            Ok(Client {
-                image_client,
-                runtime_client,
-            })
-        }
-    }
+    let runtime_client = RuntimeServiceClient::new(channel.clone());
+    let image_client = ImageServiceClient::new(channel);
+
+    Ok(Client {
+        image_client,
+        runtime_client,
+    })
 }
 
 impl Client {
@@ -93,7 +107,7 @@ impl Client {
             .images
             .iter()
             .map(|i| ImageSummary {
-                id: i.id.clone(),
+                id: i.id.split(':').nth(1).unwrap_or("<Unknown>").to_string(),
                 name: i
                     .repo_tags
                     .first()
@@ -195,4 +209,14 @@ impl Client {
         unimplemented!()
     }
     */
+
+    pub(crate) async fn info(&mut self) -> Result<String> {
+        let request = tonic::Request::new(VersionRequest {
+            version: "v1".to_string(),
+        });
+        let version = self.runtime_client.version(request).await?;
+        let request = tonic::Request::new(StatusRequest { verbose: true });
+        let status = self.runtime_client.status(request).await?;
+        Ok(format!("{:?} - {:?}", version.get_ref(), status.get_ref()))
+    }
 }
