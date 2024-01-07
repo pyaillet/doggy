@@ -1,22 +1,10 @@
-use std::io::Write;
-
-use bollard::exec::{CreateExecOptions, ResizeExecOptions, StartExecResults};
 use color_eyre::Result;
 
-use crossterm::cursor::{self, MoveTo};
-use crossterm::terminal::{Clear, ClearType};
-use crossterm::ExecutableCommand;
-
-use futures::StreamExt;
-use tokio::io::{stdin, AsyncReadExt, AsyncWriteExt};
-use tokio::select;
 use tokio::sync::mpsc::UnboundedSender;
-use tokio::task::spawn;
-use tokio_util::sync::CancellationToken;
 
 use crate::action::Action;
 use crate::components::{containers::Containers, Component};
-use crate::runtime::get_docker_connection;
+use crate::runtime::container_exec;
 use crate::tui;
 
 const DEFAULT_CMD: &str = "/bin/bash";
@@ -43,70 +31,8 @@ impl ContainerExec {
     }
 
     async fn exec(&mut self) -> Result<()> {
-        let cancellation_token = CancellationToken::new();
-        let _cancellation_token = cancellation_token.clone();
-        let tty_size = crossterm::terminal::size()?;
-        let mut stdout = std::io::stdout();
+        container_exec(&self.cid, &self.command).await?;
 
-        let docker = get_docker_connection()?;
-        let exec = docker
-            .create_exec(
-                &self.cid,
-                CreateExecOptions {
-                    attach_stdout: Some(true),
-                    attach_stderr: Some(true),
-                    attach_stdin: Some(true),
-                    tty: Some(true),
-                    cmd: Some(vec![self.command.to_string()]),
-                    ..Default::default()
-                },
-            )
-            .await?
-            .id;
-
-        if let StartExecResults::Attached {
-            mut output,
-            mut input,
-        } = docker.start_exec(&exec, None).await?
-        {
-            // pipe stdin into the docker exec stream input
-            let handle = spawn(async move {
-                let mut buf: [u8; 1] = [0];
-                let mut should_stop = false;
-                let mut stdin = stdin();
-                while !should_stop {
-                    select!(
-                        _ = _cancellation_token.cancelled() => { should_stop = true; },
-                        _ = stdin.read(&mut buf) => { input.write(&buf).await.ok(); }
-                    );
-                }
-            });
-
-            stdout.execute(MoveTo(0, 0))?;
-            stdout.execute(Clear(ClearType::All))?;
-            stdout.execute(cursor::Show)?;
-
-            docker
-                .resize_exec(
-                    &exec,
-                    ResizeExecOptions {
-                        height: tty_size.1,
-                        width: tty_size.0,
-                    },
-                )
-                .await?;
-
-            // pipe docker exec output into stdout
-            while let Some(Ok(output)) = output.next().await {
-                stdout.write_all(output.into_bytes().as_ref())?;
-                stdout.flush()?;
-                log::debug!("========================== FLUSH");
-            }
-
-            log::debug!("Closing terminal");
-            cancellation_token.cancel();
-            handle.await?;
-        }
         Ok(())
     }
 

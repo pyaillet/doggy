@@ -10,6 +10,7 @@ use crate::components::images::Images;
 use crate::components::networks::Networks;
 use crate::components::volumes::Volumes;
 use crate::components::Component;
+use crate::runtime::{get_suggestions, CONTAINERS, IMAGES, NETWORKS, VOLUMES};
 use crate::tui;
 use crate::utils::{default_layout, help_screen, toast};
 
@@ -20,13 +21,6 @@ enum InputMode {
 }
 
 const DEFAULT_TOAST_DELAY: usize = 8;
-
-const CONTAINERS: &str = "containers";
-const IMAGES: &str = "images";
-const NETWORKS: &str = "networks";
-const VOLUMES: &str = "volumes";
-
-const SUGGESTIONS: [&str; 4] = [CONTAINERS, IMAGES, NETWORKS, VOLUMES];
 
 pub enum Popup {
     None,
@@ -49,6 +43,7 @@ pub struct App {
     frame_rate: f64,
     tick_rate: f64,
     show_popup: Popup,
+    runtime_info: Option<String>,
 }
 
 impl App {
@@ -64,6 +59,7 @@ impl App {
             frame_rate,
             tick_rate,
             show_popup: Popup::None,
+            runtime_info: None,
         }
     }
 
@@ -78,6 +74,9 @@ impl App {
         let mut main: Component = Component::Containers(Containers::new(None));
         main.register_action_handler(action_tx.clone());
 
+        let info = crate::runtime::get_runtime_info().await?;
+        self.runtime_info = Some(info);
+
         loop {
             if let Some(event) = tui.next().await {
                 match event {
@@ -86,7 +85,7 @@ impl App {
                     tui::Event::Resize(x, y) => action_tx.send(Action::Resize(x, y))?,
                     tui::Event::Key(kevent) => match self.input_mode {
                         InputMode::Change | InputMode::Filter => {
-                            self.handle_input(kevent, action_tx.clone())?;
+                            self.handle_input(kevent, action_tx.clone()).await?;
                         }
                         InputMode::None => {
                             if let Some(kevent) = main.handle_input(kevent)? {
@@ -197,7 +196,12 @@ impl App {
     fn draw_header(&self, f: &mut ratatui::prelude::Frame<'_>, rect: ratatui::prelude::Rect) {
         match self.input_mode {
             InputMode::None => {
-                let p = Paragraph::new("Welcome to Doggy!");
+                let text = if let Some(info) = &self.runtime_info {
+                    vec![Span::from("Welcome to Doggy"), Span::from(info.clone())]
+                } else {
+                    vec![Span::from("Welcome to Doggy")]
+                };
+                let p = Paragraph::new(Line::from(text));
                 f.render_widget(p, rect)
             }
             InputMode::Change => {
@@ -278,7 +282,7 @@ impl App {
         self.cursor_position = 0;
     }
 
-    fn handle_input(
+    async fn handle_input(
         &mut self,
         kevent: event::KeyEvent,
         action_tx: UnboundedSender<Action>,
@@ -295,7 +299,7 @@ impl App {
                 },
                 KeyCode::Char(to_insert) => {
                     self.enter_char(to_insert);
-                    self.suggestion = self.update_suggestion();
+                    self.suggestion = self.update_suggestion().await;
                 }
                 KeyCode::Backspace => {
                     self.delete_char();
@@ -355,10 +359,12 @@ impl App {
         self.input_mode = InputMode::None;
     }
 
-    fn update_suggestion(&self) -> Option<&'static str> {
-        SUGGESTIONS
-            .into_iter()
+    async fn update_suggestion(&self) -> Option<&'static str> {
+        get_suggestions()
+            .await
+            .iter()
             .find(|searched| searched.starts_with(&self.input))
+            .copied()
     }
 
     fn handle_key(
