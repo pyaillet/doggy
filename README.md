@@ -30,7 +30,12 @@ You can download one of the binary from the release page
 By default `doggy` will try the following in order:
 1. Check for existence of the environment variables `DOCKER_HOST` and `DOCKER_CERT_PATH`, if both are defined it will try to connect to the address in the `DOCKER_HOST` variable and use `ca.pem`, `cert.pem` and `key.pem` in `DOCKER_CERT_PATH` to establish a secure connection to the docker daemon.
 2. Check for existence of the environment variables `DOCKER_HOST`, if only this one is defined it will try to connect to the address in the `DOCKER_HOST` variable to establish *an insecure connection* to the docker daemon.
-3. If the variables are not defined, it will connect to the local socket `unix:///var/run/docker.sock`
+3. If the variables are not defined, it will search for the local socket `unix:///var/run/docker.sock`
+4. If the socket is not found, it will search for the CRI socket `unix:///var/run/containerd/containerd.sock`
+
+It's also possible to specify where to find the sockets with command args:
+- `--docker <docker socket path>`
+- `--cri <cri socket path>`
 
 ### Key bindings
 
