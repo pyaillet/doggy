@@ -22,6 +22,7 @@ enum InputMode {
 
 const DEFAULT_TOAST_DELAY: usize = 8;
 
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Popup {
     None,
     Error {
@@ -377,37 +378,39 @@ impl App {
         kevent: event::KeyEvent,
         action_tx: UnboundedSender<Action>,
     ) -> Result<()> {
-        let action = match main.get_action(&kevent) {
-            None => match kevent.code {
-                KeyCode::Char('a') => Some(Action::All),
-                KeyCode::Char('q') => Some(Action::Quit),
-                KeyCode::Char(':') => Some(Action::Change),
-                KeyCode::Char('/') => {
-                    if main.has_filter() {
-                        Some(Action::Filter)
-                    } else {
-                        None
-                    }
-                }
-                KeyCode::Char('j') | KeyCode::Down => Some(Action::Down),
-                KeyCode::Char('k') | KeyCode::Up => Some(Action::Up),
-                KeyCode::Char('?') => Some(Action::Help),
-                KeyCode::F(n) => Some(Action::SortColumn(n)),
-                KeyCode::PageUp => Some(Action::PageUp),
-                KeyCode::PageDown => Some(Action::PageDown),
-                KeyCode::Esc => Some(Action::PreviousScreen),
-                KeyCode::Enter => Some(Action::Ok),
-                KeyCode::Char('d') => {
-                    if let KeyModifiers::CONTROL = kevent.modifiers {
-                        Some(Action::Delete)
-                    } else {
-                        None
-                    }
-                }
-                _ => None,
-            },
-            Some(action) => Some(action),
+        let action = if self.show_popup == Popup::None {
+            main.get_action(&kevent)
+        } else {
+            None
         };
+        let action = action.or(match kevent.code {
+            KeyCode::Char('a') => Some(Action::All),
+            KeyCode::Char('q') => Some(Action::Quit),
+            KeyCode::Char(':') => Some(Action::Change),
+            KeyCode::Char('/') => {
+                if main.has_filter() {
+                    Some(Action::Filter)
+                } else {
+                    None
+                }
+            }
+            KeyCode::Char('j') | KeyCode::Down => Some(Action::Down),
+            KeyCode::Char('k') | KeyCode::Up => Some(Action::Up),
+            KeyCode::Char('?') => Some(Action::Help),
+            KeyCode::F(n) => Some(Action::SortColumn(n)),
+            KeyCode::PageUp => Some(Action::PageUp),
+            KeyCode::PageDown => Some(Action::PageDown),
+            KeyCode::Esc => Some(Action::PreviousScreen),
+            KeyCode::Enter => Some(Action::Ok),
+            KeyCode::Char('d') => {
+                if let KeyModifiers::CONTROL = kevent.modifiers {
+                    Some(Action::Delete)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        });
         if let Some(action) = action {
             action_tx.send(action)?;
         }
