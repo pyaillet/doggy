@@ -23,6 +23,9 @@ FROM rust:slim-bookworm as builder
 
 WORKDIR /app
 COPY Cargo.toml Cargo.lock .
+RUN apt-get update && \
+    apt-get install -y protobuf-compiler
+
 RUN \
     mkdir /app/src && \
     echo 'fn main() {}' > /app/src/main.rs && \

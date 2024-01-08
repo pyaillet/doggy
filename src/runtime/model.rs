@@ -7,6 +7,13 @@ use ratatui::{
     text::Span,
     widgets::Row,
 };
+
+#[derive(Clone, Debug)]
+pub struct RuntimeSummary {
+    pub name: String,
+    pub version: String,
+}
+
 #[derive(Clone, Debug)]
 pub struct VolumeSummary {
     pub id: String,

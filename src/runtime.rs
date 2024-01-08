@@ -114,14 +114,28 @@ async fn init_cri(config: cri::ConnectionConfig) -> Result<()> {
 }
 
 pub async fn init(config: Option<ConnectionConfig>) -> Result<()> {
-    let config = config
-        .or_else(|| docker::detect_connection_config().map(ConnectionConfig::Docker))
-        .or_else(|| cri::detect_connection_config().map(ConnectionConfig::Cri));
+    #[cfg(feature = "cri")]
+    {
+        let config = config
+            .or_else(|| docker::detect_connection_config().map(ConnectionConfig::Docker))
+            .or_else(|| cri::detect_connection_config().map(ConnectionConfig::Cri));
 
-    match config {
-        Some(ConnectionConfig::Cri(c)) => init_cri(c).await,
-        Some(ConnectionConfig::Docker(c)) => init_docker(c).await,
-        None => Err(NoConfigurationFound {}.into()),
+        match config {
+            Some(ConnectionConfig::Cri(c)) => init_cri(c).await,
+            Some(ConnectionConfig::Docker(c)) => init_docker(c).await,
+            None => Err(NoConfigurationFound {}.into()),
+        }
+    }
+
+    #[cfg(not(feature = "cri"))]
+    {
+        let config =
+            config.or_else(|| docker::detect_connection_config().map(ConnectionConfig::Docker));
+
+        match config {
+            Some(ConnectionConfig::Docker(c)) => init_docker(c).await,
+            None => Err(NoConfigurationFound {}.into()),
+        }
     }
 }
 
@@ -314,7 +328,7 @@ pub(crate) async fn container_exec(cid: &str, cmd: &str) -> Result<()> {
     }
 }
 
-pub(crate) async fn get_runtime_info() -> Result<String> {
+pub(crate) async fn get_runtime_info() -> Result<RuntimeSummary> {
     let mut client = CLIENT.lock().await;
     match *client {
         Some(ref mut conn) => match &mut conn.client {

@@ -10,7 +10,7 @@ use crate::components::images::Images;
 use crate::components::networks::Networks;
 use crate::components::volumes::Volumes;
 use crate::components::Component;
-use crate::runtime::{get_suggestions, CONTAINERS, IMAGES, NETWORKS, VOLUMES};
+use crate::runtime::{get_suggestions, RuntimeSummary, CONTAINERS, IMAGES, NETWORKS, VOLUMES};
 use crate::tui;
 use crate::utils::{default_layout, help_screen, toast};
 
@@ -43,7 +43,7 @@ pub struct App {
     frame_rate: f64,
     tick_rate: f64,
     show_popup: Popup,
-    runtime_info: Option<String>,
+    runtime_info: Option<RuntimeSummary>,
 }
 
 impl App {
@@ -197,11 +197,15 @@ impl App {
         match self.input_mode {
             InputMode::None => {
                 let text = if let Some(info) = &self.runtime_info {
-                    vec![Span::from("Welcome to Doggy"), Span::from(info.clone())]
+                    vec![
+                        Line::from("Welcome to Doggy"),
+                        Line::from(format!("Runtime: {}", info.name)),
+                        Line::from(format!("Version: {}", info.version)),
+                    ]
                 } else {
-                    vec![Span::from("Welcome to Doggy")]
+                    vec![Line::from("Welcome to Doggy")]
                 };
-                let p = Paragraph::new(Line::from(text));
+                let p = Paragraph::new(text);
                 f.render_widget(p, rect)
             }
             InputMode::Change => {
