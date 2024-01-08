@@ -5,14 +5,14 @@ use color_eyre::Result;
 use k8s_cri::v1::{
     image_service_client::ImageServiceClient, runtime_service_client::RuntimeServiceClient,
     ContainerStatusRequest, ImageSpec, ImageStatusRequest, ListContainersRequest,
-    ListImagesRequest, RemoveContainerRequest, RemoveImageRequest, StatusRequest, VersionRequest,
+    ListImagesRequest, RemoveContainerRequest, RemoveImageRequest, VersionRequest,
 };
 
 use tokio::net::UnixStream;
 use tonic::transport::{Channel, Endpoint, Uri};
 use tower::service_fn;
 
-use super::{ContainerSummary, ImageSummary};
+use super::{ContainerSummary, ImageSummary, RuntimeSummary};
 
 const SOCKET_PATH: &str = "/run/containerd/containerd.sock";
 
@@ -210,13 +210,17 @@ impl Client {
     }
     */
 
-    pub(crate) async fn info(&mut self) -> Result<String> {
+    pub(crate) async fn info(&mut self) -> Result<RuntimeSummary> {
         let request = tonic::Request::new(VersionRequest {
             version: "v1".to_string(),
         });
         let version = self.runtime_client.version(request).await?;
-        let request = tonic::Request::new(StatusRequest { verbose: true });
-        let status = self.runtime_client.status(request).await?;
-        Ok(format!("{:?} - {:?}", version.get_ref(), status.get_ref()))
+        // let request = tonic::Request::new(StatusRequest { verbose: true });
+        // let status = self.runtime_client.status(request).await?.get_ref();
+        let runtime_info = RuntimeSummary {
+            name: version.get_ref().runtime_name.to_string(),
+            version: version.get_ref().runtime_version.to_string(),
+        };
+        Ok(runtime_info)
     }
 }

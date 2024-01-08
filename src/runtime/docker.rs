@@ -27,10 +27,10 @@ use tokio_util::sync::CancellationToken;
 
 use crate::utils::get_or_not_found;
 
-use super::{ContainerSummary, ImageSummary, NetworkSummary, VolumeSummary};
+use super::{ContainerSummary, ImageSummary, NetworkSummary, RuntimeSummary, VolumeSummary};
 
 const DEFAULT_TIMEOUT: u64 = 120;
-const DEFAULT_SOCKET_PATH: &str = "/var/run/docker/docker.sock";
+const DEFAULT_SOCKET_PATH: &str = "/var/run/docker.sock";
 
 pub enum ConnectionConfig {
     Ssl(String, String),
@@ -327,9 +327,13 @@ impl Client {
         Ok(())
     }
 
-    pub(crate) async fn info(&self) -> Result<String> {
+    pub(crate) async fn info(&self) -> Result<RuntimeSummary> {
         let info = self.client.info().await?;
-        Ok(format!("{:?}", info))
+        let runtime = RuntimeSummary {
+            version: info.server_version.unwrap_or("Unknown".to_string()),
+            name: "docker".to_string(),
+        };
+        Ok(runtime)
     }
 }
 
