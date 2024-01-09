@@ -8,10 +8,13 @@ use ratatui::{
     widgets::Row,
 };
 
+use super::ConnectionConfig;
+
 #[derive(Clone, Debug)]
 pub struct RuntimeSummary {
     pub name: String,
     pub version: String,
+    pub config: Option<ConnectionConfig>,
 }
 
 #[derive(Clone, Debug)]

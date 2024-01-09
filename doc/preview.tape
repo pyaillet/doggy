@@ -153,4 +153,7 @@ Sleep 1s
 Type "cont"
 Sleep 1s
 
+Escape
+Sleep 800ms
+
 Type "q"
