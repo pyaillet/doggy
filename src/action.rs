@@ -31,6 +31,7 @@ pub(crate) enum Action {
     Help,
     AutoScroll,
     Since(u16),
+    LineWrap,
 }
 
 impl Display for Action {

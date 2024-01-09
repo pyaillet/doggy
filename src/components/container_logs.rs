@@ -9,6 +9,7 @@ use futures::StreamExt;
 
 use futures::executor::block_on;
 use ratatui::layout::{Constraint, Layout};
+use ratatui::widgets::Wrap;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::Mutex;
 use tokio::{select, spawn};
@@ -37,6 +38,7 @@ pub struct ContainerLogs {
     follow: bool,
     auto_scroll: bool,
     since: i64,
+    line_wrap: bool,
 }
 
 async fn run_setup_task(
@@ -84,6 +86,8 @@ impl ContainerLogs {
 
         let since = 15;
 
+        let line_wrap = false;
+
         let task = Arc::new(spawn(run_setup_task(
             id.clone(),
             follow,
@@ -104,6 +108,7 @@ impl ContainerLogs {
             follow: true,
             auto_scroll: true,
             since,
+            line_wrap,
         }
     }
 
@@ -179,6 +184,9 @@ impl ContainerLogs {
             Action::AutoScroll => {
                 self.auto_scroll = !self.auto_scroll;
             }
+            Action::LineWrap => {
+                self.line_wrap = !self.line_wrap;
+            }
             _ => {}
         }
         Ok(())
@@ -202,6 +210,11 @@ impl ContainerLogs {
             ),
             Span::from(" - Since: "),
             Span::styled(format!("{}m", self.since), Style::new().bold()),
+            Span::from(" - Line wrap: "),
+            Span::styled(
+                if self.line_wrap { "On" } else { "Off" },
+                Style::new().bold(),
+            ),
         ]))
         .block(Block::default().borders(Borders::NONE).gray());
         let mut log_paragraph = Paragraph::new(
@@ -222,6 +235,9 @@ impl ContainerLogs {
                     Style::default().add_modifier(Modifier::BOLD),
                 )),
         );
+        if self.line_wrap {
+            log_paragraph = log_paragraph.wrap(Wrap { trim: false });
+        }
         if self.auto_scroll {
             let lines = area.height - 2;
             self.vertical_scroll = logs.len().saturating_sub(lines.into());
@@ -235,6 +251,7 @@ impl ContainerLogs {
     pub(crate) fn get_bindings(&self) -> Option<&[(&str, &str)]> {
         Some(&[
             ("s", "Autoscroll"),
+            ("w", "Line wrap"),
             ("1", "Since 1m"),
             ("2", "Since 3m"),
             ("3", "Since 5m"),
@@ -246,6 +263,7 @@ impl ContainerLogs {
     pub(crate) fn get_action(&self, k: &event::KeyEvent) -> Option<Action> {
         match k.code {
             KeyCode::Char('s') => Some(Action::AutoScroll),
+            KeyCode::Char('w') => Some(Action::LineWrap),
             KeyCode::Char('1') => Some(Action::Since(1)),
             KeyCode::Char('2') => Some(Action::Since(3)),
             KeyCode::Char('3') => Some(Action::Since(5)),
