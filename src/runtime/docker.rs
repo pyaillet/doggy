@@ -1,4 +1,4 @@
-use std::{env, fs, io::Write, path::PathBuf};
+use std::{env, fmt::Display, fs, io::Write, path::PathBuf};
 
 use bollard::{
     container::{
@@ -27,11 +27,12 @@ use tokio_util::sync::CancellationToken;
 
 use crate::utils::get_or_not_found;
 
-use super::{ContainerSummary, ImageSummary, NetworkSummary, RuntimeSummary, VolumeSummary};
+use super::{ContainerSummary, ImageSummary, NetworkSummary, VolumeSummary};
 
 const DEFAULT_TIMEOUT: u64 = 120;
 const DEFAULT_SOCKET_PATH: &str = "/var/run/docker.sock";
 
+#[derive(Clone, Debug)]
 pub enum ConnectionConfig {
     Ssl(String, String),
     Http(String),
@@ -54,6 +55,21 @@ impl ConnectionConfig {
 
     pub fn ssl(address: String, certs_path: String) -> Self {
         ConnectionConfig::Ssl(address, certs_path)
+    }
+}
+
+impl Display for ConnectionConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConnectionConfig::Ssl(host, _certs_path) => f.write_str(host),
+            ConnectionConfig::Http(host) => f.write_str(host),
+            ConnectionConfig::Socket(Some(socket_path)) => {
+                f.write_fmt(format_args!("unix://{}", socket_path))
+            }
+            ConnectionConfig::Socket(None) => {
+                f.write_fmt(format_args!("unix://{}", DEFAULT_SOCKET_PATH))
+            }
+        }
     }
 }
 
@@ -327,13 +343,11 @@ impl Client {
         Ok(())
     }
 
-    pub(crate) async fn info(&self) -> Result<RuntimeSummary> {
+    pub(crate) async fn info(&self) -> Result<(String, String)> {
         let info = self.client.info().await?;
-        let runtime = RuntimeSummary {
-            version: info.server_version.unwrap_or("Unknown".to_string()),
-            name: "docker".to_string(),
-        };
-        Ok(runtime)
+        let version = info.server_version.unwrap_or("Unknown".to_string());
+        let name = "docker".to_string();
+        Ok((name, version))
     }
 }
 

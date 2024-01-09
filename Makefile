@@ -10,6 +10,12 @@ prepare-preview:
 	docker compose -f doc/docker-compose.yaml up -d
 	docker wait doc-docker-1
 
+clean-preview:
+	docker compose -f doc/docker-compose.yaml run --entrypoint /scripts/clean.sh docker
+	docker compose -f doc/docker-compose.yaml down
+	
+
+
 .PHONY: tracing
 tracing:
 	docker compose -f tracing/docker-compose.yaml up -d

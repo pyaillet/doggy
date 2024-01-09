@@ -60,11 +60,22 @@ impl Display for NoConfigurationFound {
 
 impl Error for NoConfigurationFound {}
 
+#[derive(Clone, Debug)]
 pub enum ConnectionConfig {
     #[cfg(feature = "docker")]
     Docker(docker::ConnectionConfig),
     #[cfg(feature = "cri")]
     Cri(cri::ConnectionConfig),
+}
+
+impl Display for ConnectionConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConnectionConfig::Docker(config) => f.write_fmt(format_args!("{}", config)),
+            #[cfg(feature = "cri")]
+            ConnectionConfig::Cri(config) => f.write_fmt(format_args!("{}", config)),
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -330,13 +341,18 @@ pub(crate) async fn container_exec(cid: &str, cmd: &str) -> Result<()> {
 
 pub(crate) async fn get_runtime_info() -> Result<RuntimeSummary> {
     let mut client = CLIENT.lock().await;
-    match *client {
+    let (name, version) = match *client {
         Some(ref mut conn) => match &mut conn.client {
             #[cfg(feature = "docker")]
-            Client::Docker(client) => client.info().await,
+            Client::Docker(client) => client.info().await?,
             #[cfg(feature = "cri")]
-            Client::Cri(client) => client.info().await,
+            Client::Cri(client) => client.info().await?,
         },
-        _ => Err(NotInitialized {}.into()),
-    }
+        _ => Err(NotInitialized {})?,
+    };
+    Ok(RuntimeSummary {
+        name,
+        version,
+        config: (*client).as_ref().map(|c| c.config.clone()),
+    })
 }

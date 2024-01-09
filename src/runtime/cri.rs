@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs};
+use std::{collections::HashMap, fmt::Display, fs};
 
 use color_eyre::Result;
 
@@ -12,9 +12,9 @@ use tokio::net::UnixStream;
 use tonic::transport::{Channel, Endpoint, Uri};
 use tower::service_fn;
 
-use super::{ContainerSummary, ImageSummary, RuntimeSummary};
+use super::{ContainerSummary, ImageSummary};
 
-const SOCKET_PATH: &str = "/run/containerd/containerd.sock";
+const DEFAULT_SOCKET_PATH: &str = "/run/containerd/containerd.sock";
 
 enum ContainerState {
     Created = 0,
@@ -45,6 +45,7 @@ impl From<ContainerState> for super::ContainerStatus {
     }
 }
 
+#[derive(Clone, Debug)]
 pub enum ConnectionConfig {
     Socket(Option<String>),
 }
@@ -59,13 +60,26 @@ impl ConnectionConfig {
     }
 }
 
+impl Display for ConnectionConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConnectionConfig::Socket(Some(socket_path)) => {
+                f.write_fmt(format_args!("unix://{}", socket_path))
+            }
+            ConnectionConfig::Socket(None) => {
+                f.write_fmt(format_args!("unix://{}", DEFAULT_SOCKET_PATH))
+            }
+        }
+    }
+}
+
 pub struct Client {
     image_client: ImageServiceClient<Channel>,
     runtime_client: RuntimeServiceClient<Channel>,
 }
 
 pub fn detect_connection_config() -> Option<ConnectionConfig> {
-    match fs::metadata(SOCKET_PATH) {
+    match fs::metadata(DEFAULT_SOCKET_PATH) {
         Ok(_) => Some(ConnectionConfig::default_socket()),
         Err(_) => None,
     }
@@ -73,7 +87,7 @@ pub fn detect_connection_config() -> Option<ConnectionConfig> {
 
 pub(crate) async fn connect(config: &ConnectionConfig) -> Result<Client> {
     let socket_path = match config {
-        ConnectionConfig::Socket(None) => SOCKET_PATH.to_string(),
+        ConnectionConfig::Socket(None) => DEFAULT_SOCKET_PATH.to_string(),
         ConnectionConfig::Socket(Some(path)) => path.to_string(),
     };
 
@@ -210,17 +224,15 @@ impl Client {
     }
     */
 
-    pub(crate) async fn info(&mut self) -> Result<RuntimeSummary> {
+    pub(crate) async fn info(&mut self) -> Result<(String, String)> {
         let request = tonic::Request::new(VersionRequest {
             version: "v1".to_string(),
         });
         let version = self.runtime_client.version(request).await?;
         // let request = tonic::Request::new(StatusRequest { verbose: true });
         // let status = self.runtime_client.status(request).await?.get_ref();
-        let runtime_info = RuntimeSummary {
-            name: version.get_ref().runtime_name.to_string(),
-            version: version.get_ref().runtime_version.to_string(),
-        };
-        Ok(runtime_info)
+        let name = version.get_ref().runtime_name.to_string();
+        let version = version.get_ref().runtime_version.to_string();
+        Ok((name, version))
     }
 }

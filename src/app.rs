@@ -199,9 +199,17 @@ impl App {
             InputMode::None => {
                 let text = if let Some(info) = &self.runtime_info {
                     vec![
-                        Line::from("Welcome to Doggy"),
-                        Line::from(format!("Runtime: {}", info.name)),
-                        Line::from(format!("Version: {}", info.version)),
+                        Line::from(format!(
+                            "Welcome to Doggy - Using {}@{}",
+                            info.name, info.version
+                        )),
+                        Line::from(format!(
+                            "Connected to: {}",
+                            info.config
+                                .as_ref()
+                                .map(|c| c.to_string())
+                                .unwrap_or("<Unknown>".to_string())
+                        )),
                     ]
                 } else {
                     vec![Line::from("Welcome to Doggy")]
