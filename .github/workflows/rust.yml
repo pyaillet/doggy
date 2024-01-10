@@ -30,14 +30,34 @@ jobs:
     needs: build
     strategy:
       matrix:
-        target:
-          - aarch64-unknown-linux-gnu
-          - x86_64-unknown-linux-gnu
-    runs-on: ubuntu-latest
+        include:
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: x86_64-apple-darwin
+            os: macos-latest
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+        run: |
+          declare VERSION=3.14.0 && \
+          echo "📦 Installing version: ${VERSION}" && \
+          declare TARGET_OS=$(if [[ $(uname -s) == "Linux" ]]; then echo "linux"; else echo "osx"; fi) && \
+          declare ARCH=$(uname -m) && \
+          echo "📦 Installing for os/arch: ${TARGET_OS}/${ARCH}" && \
+          PROTOC_ZIP=protoc-${VERSION}-${TARGET_OS}-${ARCH}.zip && \
+          echo "🏷️ Will get the archive file: ${PROTOC_ZIP}" && \
+          curl -OL https://github.com/protocolbuffers/protobuf/releases/download/v${VERSION}/${PROTOC_ZIP} && \
+          echo "🏗️ Installing in path" && \
+          sudo unzip -o ${PROTOC_ZIP} -d /usr/local bin/protoc && \
+          sudo chmod +x /usr/local/bin/protoc && \
+          sudo unzip -o ${PROTOC_ZIP} -d /usr/local 'include/*' && \
+          echo "🧹 Cleaning up" && \
+          rm -f ${PROTOC_ZIP}
       - name: Install Rust
         run: rustup update stable
       - name: Install cross-compilation tools
@@ -46,3 +66,5 @@ jobs:
           target: ${{ matrix.target }}
       - name: cross build
         run: cargo build --target ${{ matrix.target }}
+        env:
+          PROTOC: /usr/local/bin/protoc

@@ -40,7 +40,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+        run: |
+          declare VERSION=3.14.0 && \
+          echo "📦 Installing version: ${VERSION}" && \
+          declare TARGET_OS=$(if [[ $(uname -s) == "Linux" ]]; then echo "linux"; else echo "osx"; fi) && \
+          declare ARCH=$(uname -m) && \
+          echo "📦 Installing for os/arch: ${TARGET_OS}/${ARCH}" && \
+          PROTOC_ZIP=protoc-${VERSION}-${TARGET_OS}-${ARCH}.zip && \
+          echo "🏷️ Will get the archive file: ${PROTOC_ZIP}" && \
+          curl -OL https://github.com/protocolbuffers/protobuf/releases/download/v${VERSION}/${PROTOC_ZIP} && \
+          echo "🏗️ Installing in path" && \
+          sudo unzip -o ${PROTOC_ZIP} -d /usr/local bin/protoc && \
+          sudo chmod +x /usr/local/bin/protoc && \
+          sudo unzip -o ${PROTOC_ZIP} -d /usr/local 'include/*' && \
+          echo "🧹 Cleaning up" && \
+          rm -f ${PROTOC_ZIP}
       - uses: taiki-e/upload-rust-binary-action@v1
         with:
           # (required) Comma-separated list of binary names (non-extension portion of filename) to build and upload.
@@ -50,3 +64,5 @@ jobs:
           target: ${{ matrix.target }}
           # (required) GitHub token for uploading assets to GitHub Releases.
           token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          PROTOC: /usr/local/bin/protoc
