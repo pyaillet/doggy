@@ -29,21 +29,25 @@ jobs:
             os: ubuntu-latest
             arch: aarch_64
             target_os: linux
+            asset_source: ./target/aarch64-unknown-linux-gnu/release/doggy
             asset_name: doggy-linux-aarch64
           - target: aarch64-apple-darwin
             os: macos-latest
             arch: x86_64
             target_os: osx
+            asset_source: ./target/aarch64-apple-darwin/release/doggy
             asset_name: doggy-osx-aarch64
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             arch: x86_64
             target_os: linux
+            asset_source: ./target/x86_64-unknown-linux-gnu/release/doggy
             asset_name: doggy-linux-amd64
           - target: x86_64-apple-darwin
             os: macos-latest
             arch: x86_64
             target_os: osx
+            asset_source: ./target/x86_64-apple-darwin/release/doggy
             asset_name: doggy-osx-amd64
     runs-on: ${{ matrix.os }}
     steps:
