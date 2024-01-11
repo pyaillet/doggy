@@ -69,9 +69,11 @@ jobs:
         with:
           target: ${{ matrix.target }}
       - name: cross build
-        run: cargo build --target ${{ matrix.target }}
+        run: cargo build --target ${{ matrix.target }} --release
         env:
           PROTOC: /usr/local/bin/protoc
+      - name: debug
+        run: find ./target/release
       - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2
         with:
