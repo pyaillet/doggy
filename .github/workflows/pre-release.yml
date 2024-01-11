@@ -1,0 +1,88 @@
+name: Prepare Release
+
+permissions:
+  contents: write
+
+on:
+  push:
+    tags:
+      - v[0-9]+.*
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/create-gh-release-action@v1
+        with:
+          # (optional) Path to changelog.
+          # changelog: CHANGELOG.md
+          # (required) GitHub token for creating GitHub Releases.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  upload-assets:
+    needs: create-release
+    strategy:
+      matrix:
+        include:
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            arch: aarch_64
+            target_os: linux
+            asset_source: ./target/aarch64-unknown-linux-gnu/release/doggy
+            asset_name: doggy-linux-aarch64
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            arch: x86_64
+            target_os: osx
+            asset_source: ./target/aarch64-apple-darwin/release/doggy
+            asset_name: doggy-osx-aarch64
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            arch: x86_64
+            target_os: linux
+            asset_source: ./target/x86_64-unknown-linux-gnu/release/doggy
+            asset_name: doggy-linux-amd64
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            arch: x86_64
+            target_os: osx
+            asset_source: ./target/x86_64-apple-darwin/release/doggy
+            asset_name: doggy-osx-amd64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          declare VERSION=25.2 && \
+          echo "📦 Installing version: ${VERSION}" && \
+          echo "📦 Installing for os/arch: ${{ matrix.target_os }}/${{ matrix.arch }}" && \
+          PROTOC_ZIP=protoc-${VERSION}-${{ matrix.target_os }}-${{ matrix.arch }}.zip && \
+          echo "🏷️ Will get the archive file: ${PROTOC_ZIP}" && \
+          curl -OL https://github.com/protocolbuffers/protobuf/releases/download/v${VERSION}/${PROTOC_ZIP} && \
+          echo "🏗️ Installing in path" && \
+          sudo unzip -o ${PROTOC_ZIP} -d /usr/local bin/protoc && \
+          sudo chmod +x /usr/local/bin/protoc && \
+          sudo unzip -o ${PROTOC_ZIP} -d /usr/local 'include/*' && \
+          echo "🧹 Cleaning up" && \
+          rm -f ${PROTO_ZIP}
+      - name: Install Rust
+        run: rustup update stable
+      - name: Install cross-compilation tools
+        uses: taiki-e/setup-cross-toolchain-action@v1
+        with:
+          target: ${{ matrix.target }}
+      - name: cross build
+        run: cargo build --target ${{ matrix.target }} --release
+        env:
+          PROTOC: /usr/local/bin/protoc
+      - name: Create archive
+        run: tar czf ./${{ matrix.asset_name }}.tar.gz ${{ matrix.asset_source}}
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ${{ matrix.asset_name }}.tar.gz
+          asset_name: ${{ matrix.asset_name }}.tar.gz
+          tag: ${{ github.ref }}
+
