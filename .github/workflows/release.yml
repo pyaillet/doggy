@@ -73,7 +73,7 @@ jobs:
         env:
           PROTOC: /usr/local/bin/protoc
       - name: debug
-        run: find ./target/release
+        run: find ./target
       - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2
         with:
