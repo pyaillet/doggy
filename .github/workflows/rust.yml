@@ -37,7 +37,7 @@ jobs:
             target_os: linux
           - target: aarch64-apple-darwin
             os: macos-latest
-            arch: aarcah_64
+            arch: aarch_64
             target_os: osx
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
