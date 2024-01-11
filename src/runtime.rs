@@ -1,4 +1,4 @@
-use std::{error::Error, fmt::Display};
+use std::fmt::Display;
 
 use tokio::sync::Mutex;
 
@@ -6,6 +6,7 @@ use lazy_static::lazy_static;
 
 use bollard::container::{LogOutput, LogsOptions};
 use color_eyre::Result;
+use eyre::eyre;
 
 #[cfg(feature = "cri")]
 pub mod cri;
@@ -37,28 +38,6 @@ pub(crate) async fn get_suggestions() -> &'static [&'static str] {
         _ => unimplemented!(),
     }
 }
-
-#[derive(Clone, Debug)]
-struct NotInitialized {}
-
-impl Display for NotInitialized {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Not initialized")
-    }
-}
-
-impl Error for NotInitialized {}
-
-#[derive(Clone, Debug)]
-struct NoConfigurationFound {}
-
-impl Display for NoConfigurationFound {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("No configuration found for runtime")
-    }
-}
-
-impl Error for NoConfigurationFound {}
 
 #[derive(Clone, Debug)]
 pub enum ConnectionConfig {
@@ -134,7 +113,7 @@ pub async fn init(config: Option<ConnectionConfig>) -> Result<()> {
         match config {
             Some(ConnectionConfig::Cri(c)) => init_cri(c).await,
             Some(ConnectionConfig::Docker(c)) => init_docker(c).await,
-            None => Err(NoConfigurationFound {}.into()),
+            None => Err(eyre!("No configuration found for runtime")),
         }
     }
 
@@ -145,7 +124,7 @@ pub async fn init(config: Option<ConnectionConfig>) -> Result<()> {
 
         match config {
             Some(ConnectionConfig::Docker(c)) => init_docker(c).await,
-            None => Err(NoConfigurationFound {}.into()),
+            None => Err(eyre!("No configuration found for runtime")),
         }
     }
 }
@@ -159,7 +138,7 @@ pub(crate) async fn list_volumes() -> Result<Vec<VolumeSummary>> {
             #[cfg(feature = "cri")]
             _ => unimplemented!(),
         },
-        _ => Err(NotInitialized {}.into()),
+        _ => Err(eyre!("Not initialized")),
     }
 }
 
@@ -173,7 +152,7 @@ pub(crate) async fn get_volume(id: &str) -> Result<String> {
             #[cfg(feature = "cri")]
             _ => unimplemented!(),
         },
-        _ => Err(NotInitialized {}.into()),
+        _ => Err(eyre!("Not initialized")),
     }
 }
 
@@ -186,7 +165,7 @@ pub(crate) async fn delete_volume(id: &str) -> Result<()> {
             #[cfg(feature = "cri")]
             _ => unimplemented!(),
         },
-        _ => Err(NotInitialized {}.into()),
+        _ => Err(eyre!("Not initialized")),
     }
 }
 
@@ -199,7 +178,7 @@ pub(crate) async fn list_networks(filter: &Option<String>) -> Result<Vec<Network
             #[cfg(feature = "cri")]
             _ => unimplemented!(),
         },
-        _ => Err(NotInitialized {}.into()),
+        _ => Err(eyre!("Not initialized")),
     }
 }
 
@@ -212,7 +191,7 @@ pub(crate) async fn get_network(id: &str) -> Result<String> {
             #[cfg(feature = "cri")]
             _ => unimplemented!(),
         },
-        _ => Err(NotInitialized {}.into()),
+        _ => Err(eyre!("Not initialized")),
     }
 }
 
@@ -225,7 +204,7 @@ pub(crate) async fn delete_network(id: &str) -> Result<()> {
             #[cfg(feature = "cri")]
             _ => unimplemented!(),
         },
-        _ => Err(NotInitialized {}.into()),
+        _ => Err(eyre!("Not initialized")),
     }
 }
 
@@ -238,7 +217,7 @@ pub(crate) async fn list_images(filter: &Option<String>) -> Result<Vec<ImageSumm
             #[cfg(feature = "cri")]
             Client::Cri(ref mut client) => client.list_images(filter).await,
         },
-        _ => Err(NotInitialized {}.into()),
+        _ => Err(eyre!("Not initialized")),
     }
 }
 
@@ -251,7 +230,7 @@ pub(crate) async fn get_image(id: &str) -> Result<String> {
             #[cfg(feature = "cri")]
             Client::Cri(ref mut client) => client.get_image(id).await,
         },
-        _ => Err(NotInitialized {}.into()),
+        _ => Err(eyre!("Not initialized")),
     }
 }
 
@@ -264,7 +243,7 @@ pub(crate) async fn delete_image(id: &str) -> Result<()> {
             #[cfg(feature = "cri")]
             Client::Cri(client) => client.delete_image(id).await,
         },
-        _ => Err(NotInitialized {}.into()),
+        _ => Err(eyre!("Not initialized")),
     }
 }
 
@@ -277,7 +256,7 @@ pub(crate) async fn delete_container(cid: &str) -> Result<()> {
             #[cfg(feature = "cri")]
             Client::Cri(client) => client.delete_container(cid).await,
         },
-        _ => Err(NotInitialized {}.into()),
+        _ => Err(eyre!("Not initialized")),
     }
 }
 
@@ -293,7 +272,7 @@ pub(crate) async fn list_containers(
             #[cfg(feature = "cri")]
             Client::Cri(client) => client.list_containers(all, filter).await,
         },
-        _ => Err(NotInitialized {}.into()),
+        _ => Err(eyre!("Not initialized")),
     }
 }
 
@@ -306,7 +285,7 @@ pub(crate) async fn get_container(cid: &str) -> Result<String> {
             #[cfg(feature = "cri")]
             Client::Cri(client) => client.get_container(cid).await,
         },
-        _ => Err(NotInitialized {}.into()),
+        _ => Err(eyre!("Not initialized")),
     }
 }
 
@@ -322,7 +301,7 @@ pub(crate) async fn get_container_logs(
             #[cfg(feature = "cri")]
             _ => unimplemented!(),
         },
-        _ => Err(NotInitialized {}.into()),
+        _ => Err(eyre!("Not initialized")),
     }
 }
 
@@ -335,7 +314,7 @@ pub(crate) async fn container_exec(cid: &str, cmd: &str) -> Result<()> {
             #[cfg(feature = "cri")]
             _ => unimplemented!(),
         },
-        _ => Err(NotInitialized {}.into()),
+        _ => Err(eyre!("Not initialized")),
     }
 }
 
@@ -348,7 +327,7 @@ pub(crate) async fn get_runtime_info() -> Result<RuntimeSummary> {
             #[cfg(feature = "cri")]
             Client::Cri(client) => client.info().await?,
         },
-        _ => Err(NotInitialized {})?,
+        _ => Err(eyre!("Not initialized"))?,
     };
     Ok(RuntimeSummary {
         name,

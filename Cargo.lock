@@ -634,6 +634,7 @@ dependencies = [
  "derive_deref",
  "directories",
  "env_logger",
+ "eyre",
  "futures",
  "human-panic",
  "humansize",

@@ -2,6 +2,8 @@ use app::App;
 
 use clap::{arg, command, Parser};
 use color_eyre::eyre::Result;
+use eyre::eyre;
+
 use utils::{initialize_logging, initialize_panic_handler, GIT_COMMIT_HASH};
 
 #[cfg(feature = "cri")]
@@ -29,17 +31,6 @@ struct Args {
     cri: Option<String>,
 }
 
-#[derive(Clone, Debug)]
-struct WrongArguments {}
-
-impl std::error::Error for WrongArguments {}
-
-impl std::fmt::Display for WrongArguments {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Wrong arguments provided")
-    }
-}
-
 #[tokio::main]
 async fn main() -> Result<()> {
     initialize_logging()?;
@@ -58,8 +49,7 @@ async fn main() -> Result<()> {
             )),
             (None, None) => None,
             (Some(_), Some(_)) => {
-                println!("You should specify --docker or --cri but not both");
-                return Err(WrongArguments {})?;
+                return Err(eyre!("You should specify --docker or --cri but not both"))?;
             }
         }
     };
