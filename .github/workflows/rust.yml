@@ -33,19 +33,19 @@ jobs:
         include:
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
-            arch: arm64
+            arch: aarch64
             target_os: linux
           - target: aarch64-apple-darwin
             os: macos-latest
-            arch: arm64
+            arch: aarch64
             target_os: osx
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-            arch: amd64
+            arch: x86_64
             target_os: linux
           - target: x86_64-apple-darwin
             os: macos-latest
-            arch: amd64
+            arch: x86_64
             target_os: osx
     runs-on: ${{ matrix.os }}
     steps:
