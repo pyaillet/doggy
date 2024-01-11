@@ -63,7 +63,7 @@ jobs:
           sudo chmod +x /usr/local/bin/protoc && \
           sudo unzip -o ${PROTOC_ZIP} -d /usr/local 'include/*' && \
           echo "🧹 Cleaning up" && \
-          rm -f ${PROTOClippy _ZIP}
+          rm -f ${PROTO_ZIP}
       - name: Install Rust
         run: rustup update stable
       - name: Install cross-compilation tools
