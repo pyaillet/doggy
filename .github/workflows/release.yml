@@ -77,13 +77,13 @@ jobs:
         env:
           PROTOC: /usr/local/bin/protoc
       - name: Create archive
-        run: tar czf ./doggy-${{ matrix.target_os }}-${{ matrix.arch }}.tar.gz ${{ matrix.asset_source}}
+        run: tar czf ./${{ matrix.asset_name }}.tar.gz ${{ matrix.asset_source}}
       - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: doggy-${{ matrix.target_os }}-${{ matrix.arch }}.tar.gz
-          asset_name: doggy-${{ matrix.target_os }}-${{ matrix.arch }}.tar.gz
+          file: ${{ matrix.asset_name }}.tar.gz
+          asset_name: ${{ matrix.asset_name }}.tar.gz
           tag: ${{ github.ref }}
 
   upload-assets-hash:
