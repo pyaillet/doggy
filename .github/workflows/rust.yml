@@ -54,8 +54,8 @@ jobs:
         run: |
           declare VERSION=3.14.0 && \
           echo "📦 Installing version: ${VERSION}" && \
-          echo "📦 Installing for os/arch: ${target_os}/${arch}" && \
-          PROTOC_ZIP=protoc-${VERSION}-${target_os}-${arch}.zip && \
+          echo "📦 Installing for os/arch: ${{ matrix.target_os }}/${{ matrix.arch }}" && \
+          PROTOC_ZIP=protoc-${VERSION}-${{ matrix.target_os }}-${{ matrix.arch }}.zip && \
           echo "🏷️ Will get the archive file: ${PROTOC_ZIP}" && \
           curl -OL https://github.com/protocolbuffers/protobuf/releases/download/v${VERSION}/${PROTOC_ZIP} && \
           echo "🏗️ Installing in path" && \
