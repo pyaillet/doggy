@@ -29,18 +29,22 @@ jobs:
             os: ubuntu-latest
             arch: aarch_64
             target_os: linux
+            asset_name: doggy-linux-aarch64
           - target: aarch64-apple-darwin
             os: macos-latest
             arch: x86_64
             target_os: osx
+            asset_name: doggy-osx-aarch64
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             arch: x86_64
             target_os: linux
+            asset_name: doggy-linux-amd64
           - target: x86_64-apple-darwin
             os: macos-latest
             arch: x86_64
             target_os: osx
+            asset_name: doggy-osx-amd64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -58,14 +62,20 @@ jobs:
           sudo unzip -o ${PROTOC_ZIP} -d /usr/local 'include/*' && \
           echo "🧹 Cleaning up" && \
           rm -f ${PROTO_ZIP}
-      - uses: taiki-e/upload-rust-binary-action@v1
+      - name: Install Rust
+        run: rustup update stable
+      - name: Install cross-compilation tools
+        uses: taiki-e/setup-cross-toolchain-action@v1
         with:
-          # (required) Comma-separated list of binary names (non-extension portion of filename) to build and upload.
-          # Note that glob pattern is not supported yet.
-          bin: doggy
-          # (optional) Target triple, default is host triple.
           target: ${{ matrix.target }}
-          # (required) GitHub token for uploading assets to GitHub Releases.
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: cross build
+        run: cargo build --target ${{ matrix.target }}
         env:
           PROTOC: /usr/local/bin/protoc
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: target/release/doggy
+          asset_name: ${{ matrix.asset_name }}
+          tag: ${{ github.ref }}
