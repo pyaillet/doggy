@@ -82,6 +82,6 @@ jobs:
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: target/release/doggy
+          file: ${{ matrix.asset_source }}
           asset_name: ${{ matrix.asset_name }}
           tag: ${{ github.ref }}
