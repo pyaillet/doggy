@@ -27,26 +27,29 @@ jobs:
         include:
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
+            arch: aarch_64
+            target_os: linux
           - target: aarch64-apple-darwin
             os: macos-latest
+            arch: x86_64
+            target_os: osx
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
+            arch: x86_64
+            target_os: linux
           - target: x86_64-apple-darwin
             os: macos-latest
-          # Universal macOS binary is supported as universal-apple-darwin.
-          #- target: universal-apple-darwin
-          #  os: macos-latest
+            arch: x86_64
+            target_os: osx
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
         run: |
-          declare VERSION=3.14.0 && \
+          declare VERSION=25.2 && \
           echo "📦 Installing version: ${VERSION}" && \
-          declare TARGET_OS=$(if [[ $(uname -s) == "Linux" ]]; then echo "linux"; else echo "osx"; fi) && \
-          declare ARCH=$(uname -m) && \
-          echo "📦 Installing for os/arch: ${TARGET_OS}/${ARCH}" && \
-          PROTOC_ZIP=protoc-${VERSION}-${TARGET_OS}-${ARCH}.zip && \
+          echo "📦 Installing for os/arch: ${{ matrix.target_os }}/${{ matrix.arch }}" && \
+          PROTOC_ZIP=protoc-${VERSION}-${{ matrix.target_os }}-${{ matrix.arch }}.zip && \
           echo "🏷️ Will get the archive file: ${PROTOC_ZIP}" && \
           curl -OL https://github.com/protocolbuffers/protobuf/releases/download/v${VERSION}/${PROTOC_ZIP} && \
           echo "🏗️ Installing in path" && \
@@ -54,7 +57,7 @@ jobs:
           sudo chmod +x /usr/local/bin/protoc && \
           sudo unzip -o ${PROTOC_ZIP} -d /usr/local 'include/*' && \
           echo "🧹 Cleaning up" && \
-          rm -f ${PROTOC_ZIP}
+          rm -f ${PROTO_ZIP}
       - uses: taiki-e/upload-rust-binary-action@v1
         with:
           # (required) Comma-separated list of binary names (non-extension portion of filename) to build and upload.
