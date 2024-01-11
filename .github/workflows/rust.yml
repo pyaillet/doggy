@@ -33,11 +33,11 @@ jobs:
         include:
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
-            arch: aarch64
+            arch: aarch_64
             target_os: linux
           - target: aarch64-apple-darwin
             os: macos-latest
-            arch: aarch64
+            arch: aarcah_64
             target_os: osx
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
@@ -63,7 +63,7 @@ jobs:
           sudo chmod +x /usr/local/bin/protoc && \
           sudo unzip -o ${PROTOC_ZIP} -d /usr/local 'include/*' && \
           echo "🧹 Cleaning up" && \
-          rm -f ${PROTOC_ZIP}
+          rm -f ${PROTOClippy _ZIP}
       - name: Install Rust
         run: rustup update stable
       - name: Install cross-compilation tools
