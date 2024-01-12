@@ -53,7 +53,7 @@ jobs:
     steps:
       - name: Extract version
         id: version-extract
-        run: TAG="${{ github.ref }}" echo "VERSION=${TAG#*v}" >> "$GITHUB_OUTPUT"
+        run: export TAG="${{ github.ref_name }}" && echo "VERSION=${TAG#*v}" >> "$GITHUB_OUTPUT"
       - name: debug
         run: echo ${{ steps.version-extract.outputs.VERSION }}
       - uses: actions/checkout@v4
