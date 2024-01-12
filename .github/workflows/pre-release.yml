@@ -30,27 +30,32 @@ jobs:
             arch: aarch_64
             target_os: linux
             asset_source: ./target/aarch64-unknown-linux-gnu/release/doggy
-            asset_name: doggy-linux-aarch64
+            asset_name: linux-arm64
           - target: aarch64-apple-darwin
             os: macos-latest
             arch: x86_64
             target_os: osx
             asset_source: ./target/aarch64-apple-darwin/release/doggy
-            asset_name: doggy-osx-aarch64
+            asset_name: darwin-arm64
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             arch: x86_64
             target_os: linux
             asset_source: ./target/x86_64-unknown-linux-gnu/release/doggy
-            asset_name: doggy-linux-amd64
+            asset_name: linux-amd64
           - target: x86_64-apple-darwin
             os: macos-latest
             arch: x86_64
             target_os: osx
             asset_source: ./target/x86_64-apple-darwin/release/doggy
-            asset_name: doggy-osx-amd64
+            asset_name: darwin-amd64
     runs-on: ${{ matrix.os }}
     steps:
+      - name: Extract version
+        id: version-extract
+        run: TAG="${{ github.ref }}" echo "VERSION=${TAG#*v}" >> "$GITHUB_OUTPUT"
+      - name: debug
+        run: echo ${{ steps.version-extract.outputs.VERSION }}
       - uses: actions/checkout@v4
       - name: Install dependencies
         run: |
@@ -83,6 +88,6 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ${{ matrix.asset_name }}.tar.gz
-          asset_name: ${{ matrix.asset_name }}.tar.gz
+          asset_name: doggy-${{ steps.version-extract.outputs.VERSION }}-${{ matrix.asset_name }}.tar.gz
           tag: ${{ github.ref }}
 
