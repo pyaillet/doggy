@@ -48,9 +48,7 @@ async fn main() -> Result<()> {
                 cri::ConnectionConfig::socket(cri),
             )),
             (None, None) => None,
-            (Some(_), Some(_)) => {
-                return Err(eyre!("You should specify --docker or --cri but not both"))?;
-            }
+            (Some(_), Some(_)) => Err(eyre!("You should specify --docker or --cri but not both"))?,
         }
     };
 
