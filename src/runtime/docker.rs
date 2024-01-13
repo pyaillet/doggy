@@ -30,7 +30,15 @@ use crate::utils::get_or_not_found;
 use super::{ContainerSummary, ImageSummary, NetworkSummary, VolumeSummary};
 
 const DEFAULT_TIMEOUT: u64 = 120;
-const DEFAULT_SOCKET_PATH: &str = "/var/run/docker.sock";
+const DEFAULT_DOCKER_SOCKET_PATH: &str = "/var/run/docker.sock";
+
+#[cfg(target_os = "macos")]
+const DEFAULT_RANCHER_DESKTOP_SOCKET_PATH: &str = ".rd/docker.sock";
+#[cfg(target_os = "macos")]
+const DEFAULT_PODMAN_DESKTOP_SOCKET_PATH: &str =
+    ".local/share/containers/podman/machine/podman.sock";
+#[cfg(target_os = "macos")]
+const DEFAULT_ORBSTACK_DESKTOP_SOCKET_PATH: &str = ".orbstack/run/docker.sock";
 
 #[derive(Clone, Debug)]
 pub enum ConnectionConfig {
@@ -67,12 +75,27 @@ impl Display for ConnectionConfig {
                 f.write_fmt(format_args!("unix://{}", socket_path))
             }
             ConnectionConfig::Socket(None) => {
-                f.write_fmt(format_args!("unix://{}", DEFAULT_SOCKET_PATH))
+                f.write_fmt(format_args!("unix://{}", DEFAULT_DOCKER_SOCKET_PATH))
             }
         }
     }
 }
 
+#[cfg(target_os = "macos")]
+fn test_other_default_socket(relative_path: &str) -> Result<ConnectionConfig> {
+    use eyre::eyre;
+    use std::path::Path;
+
+    let home_dir = env!("HOME");
+    let socket_path = Path::new(home_dir).join(relative_path);
+    let socket_path = socket_path
+        .into_os_string()
+        .into_string()
+        .map_err(|_| eyre!("Unable to convert path to string"))?;
+    fs::metadata(&socket_path).map(|_| Ok(ConnectionConfig::Socket(Some(socket_path))))?
+}
+
+#[cfg(target_os = "macos")]
 pub fn detect_connection_config() -> Option<ConnectionConfig> {
     let docker_host = env::var("DOCKER_HOST");
     let docker_cert = env::var("DOCKER_CERT_PATH");
@@ -87,7 +110,32 @@ pub fn detect_connection_config() -> Option<ConnectionConfig> {
         }
         _ => {
             log::debug!("Connect with socket");
-            match fs::metadata(DEFAULT_SOCKET_PATH) {
+            fs::metadata(DEFAULT_DOCKER_SOCKET_PATH)
+                .map(|_| ConnectionConfig::Socket(Some(DEFAULT_DOCKER_SOCKET_PATH.to_string())))
+                .or_else(|_| test_other_default_socket(DEFAULT_RANCHER_DESKTOP_SOCKET_PATH))
+                .or_else(|_| test_other_default_socket(DEFAULT_PODMAN_DESKTOP_SOCKET_PATH))
+                .or_else(|_| test_other_default_socket(DEFAULT_ORBSTACK_DESKTOP_SOCKET_PATH))
+                .ok()
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+pub fn detect_connection_config() -> Option<ConnectionConfig> {
+    let docker_host = env::var("DOCKER_HOST");
+    let docker_cert = env::var("DOCKER_CERT_PATH");
+    match (docker_host, docker_cert) {
+        (Ok(host), Ok(certs)) => {
+            log::debug!("Connect with ssl");
+            Some(ConnectionConfig::Ssl(host, certs))
+        }
+        (Ok(host), Err(_)) => {
+            log::debug!("Connect with http");
+            Some(ConnectionConfig::Http(host))
+        }
+        _ => {
+            log::debug!("Connect with socket");
+            match fs::metadata(DEFAULT_DOCKER_SOCKET_PATH) {
                 Ok(_) => Some(ConnectionConfig::default_socket()),
                 Err(_) => None,
             }
@@ -181,13 +229,7 @@ impl Client {
         let images = images
             .iter()
             .map(|i: &bollard::service::ImageSummary| ImageSummary {
-                id: i
-                    .id
-                    .to_string()
-                    .split(':')
-                    .last()
-                    .unwrap_or("NOT_FOUND")
-                    .to_string(),
+                id: i.id.split(':').last().unwrap_or("NOT_FOUND").to_string(),
                 name: get_or_not_found!(i.repo_tags.first()),
                 size: i.size,
                 created: i.created,
