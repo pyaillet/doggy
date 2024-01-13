@@ -1,6 +1,6 @@
 on:
   release:
-    types: [published]
+    types: [prereleased, released]
 
 jobs:
   homebrew-releaser:
