@@ -30,7 +30,10 @@ use crate::utils::get_or_not_found;
 use super::{ContainerSummary, ImageSummary, NetworkSummary, VolumeSummary};
 
 const DEFAULT_TIMEOUT: u64 = 120;
-const DEFAULT_SOCKET_PATH: &str = "/var/run/docker.sock";
+const DEFAULT_DOCKER_SOCKET_PATH: &str = "/var/run/docker.sock";
+const DEFAULT_RANCHER_DESKTOP_SOCKET_PATH: &str = "~/.rd/docker.sock";
+const DEFAULT_PODMAN_DESKTOP_SOCKET_PATH: &str = "/private/var/run/docker.sock";
+const DEFAULT_ORBSTACK_DESKTOP_SOCKET_PATH: &str = "~/.orbstack/run/docker.sock";
 
 #[derive(Clone, Debug)]
 pub enum ConnectionConfig {
@@ -67,7 +70,7 @@ impl Display for ConnectionConfig {
                 f.write_fmt(format_args!("unix://{}", socket_path))
             }
             ConnectionConfig::Socket(None) => {
-                f.write_fmt(format_args!("unix://{}", DEFAULT_SOCKET_PATH))
+                f.write_fmt(format_args!("unix://{}", DEFAULT_DOCKER_SOCKET_PATH))
             }
         }
     }
@@ -87,10 +90,40 @@ pub fn detect_connection_config() -> Option<ConnectionConfig> {
         }
         _ => {
             log::debug!("Connect with socket");
-            match fs::metadata(DEFAULT_SOCKET_PATH) {
-                Ok(_) => Some(ConnectionConfig::default_socket()),
-                Err(_) => None,
-            }
+            fs::metadata(DEFAULT_DOCKER_SOCKET_PATH)
+                .map(|_| {
+                    Some(ConnectionConfig::Socket(Some(
+                        DEFAULT_DOCKER_SOCKET_PATH.to_string(),
+                    )))
+                })
+                .map_err(|_| {
+                    fs::metadata(DEFAULT_RANCHER_DESKTOP_SOCKET_PATH)
+                        .map(|_| {
+                            Some(ConnectionConfig::Socket(Some(
+                                DEFAULT_RANCHER_DESKTOP_SOCKET_PATH.to_string(),
+                            )))
+                        })
+                        .ok()
+                })
+                .map_err(|_| {
+                    fs::metadata(DEFAULT_PODMAN_DESKTOP_SOCKET_PATH)
+                        .map(|_| {
+                            Some(ConnectionConfig::Socket(Some(
+                                DEFAULT_PODMAN_DESKTOP_SOCKET_PATH.to_string(),
+                            )))
+                        })
+                        .ok()
+                })
+                .map_err(|_| {
+                    fs::metadata(DEFAULT_ORBSTACK_DESKTOP_SOCKET_PATH)
+                        .map(|_| {
+                            Some(ConnectionConfig::Socket(Some(
+                                DEFAULT_ORBSTACK_DESKTOP_SOCKET_PATH.to_string(),
+                            )))
+                        })
+                        .ok()
+                })
+                .ok()?
         }
     }
 }

@@ -52,4 +52,5 @@ fn main() {
     }
 
     println!("cargo:rustc-env=DOGGY_GIT_INFO={}", git_describe);
+    println!("cargo:rustc-env=CARGO_PKG_REPOSITORY=https://github.com/pyaillet/doggy/issues/new");
 }
