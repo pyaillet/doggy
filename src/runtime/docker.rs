@@ -18,7 +18,6 @@ use crossterm::{
     terminal::{Clear, ClearType},
     ExecutableCommand,
 };
-use eyre::eyre;
 use futures::{Stream, StreamExt};
 use tokio::{
     io::{stdin, AsyncReadExt, AsyncWriteExt},
@@ -135,7 +134,7 @@ pub fn detect_connection_config() -> Option<ConnectionConfig> {
         }
         _ => {
             log::debug!("Connect with socket");
-            match fs::metadata(DEFAULT_SOCKET_PATH) {
+            match fs::metadata(DEFAULT_DOCKER_SOCKET_PATH) {
                 Ok(_) => Some(ConnectionConfig::default_socket()),
                 Err(_) => None,
             }
