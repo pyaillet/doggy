@@ -25,6 +25,15 @@ You can download one of the binary from the release page
 - Build the tool: `cargo build --release`
 - Launch it: `./target/release/doggy`
 
+### Use brew
+
+- Install via homebrew
+
+```shell-session
+brew tap pyaillet/homebrew-formulas
+brew install pyaillet/doggy
+```
+
 ## Usage
 
 ### Docker connection
