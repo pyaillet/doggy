@@ -83,6 +83,7 @@ impl Display for ConnectionConfig {
 
 #[cfg(target_os = "macos")]
 fn test_other_default_socket(relative_path: &str) -> Result<ConnectionConfig> {
+    use eyre::eyre;
     use std::path::Path;
 
     let home_dir = env!("HOME");
