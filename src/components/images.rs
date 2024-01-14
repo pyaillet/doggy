@@ -266,7 +266,7 @@ impl Images {
         if let KeyCode::Char('c') = k.code {
             if let Some((id, _)) = self.get_selected_image_info() {
                 Some(Action::Screen(Component::Containers(Containers::new(
-                    Some(id),
+                    Some(format!("ancestor={}", id).to_string()),
                 ))))
             } else {
                 None

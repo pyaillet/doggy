@@ -10,7 +10,9 @@ use ratatui::{
 };
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::runtime::{delete_container, get_container, list_containers};
+use crate::runtime::{
+    delete_container, get_container, list_containers, validate_container_filters,
+};
 use crate::{action::Action, utils::centered_rect};
 use crate::{runtime::ContainerSummary, utils::table};
 
@@ -290,7 +292,15 @@ impl Containers {
                 self.all = !self.all;
             }
             (Action::SetFilter(filter), Popup::None) => {
-                self.filter = filter;
+                if let Some(filter) = filter {
+                    if validate_container_filters(&filter).await {
+                        self.filter = Some(filter);
+                    } else {
+                        tx.send(Action::Error(format!("Invalid filter: {}", filter)))?;
+                    }
+                } else {
+                    self.filter = filter;
+                }
             }
             (Action::Inspect, Popup::None) => {
                 if let Some(cinfo) = self.get_selected_container_info() {

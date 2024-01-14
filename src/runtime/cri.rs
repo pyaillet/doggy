@@ -235,4 +235,8 @@ impl Client {
         let version = version.get_ref().runtime_version.to_string();
         Ok((name, version))
     }
+
+    pub(crate) fn validate_container_filters(&self, _name: &str) -> bool {
+        true
+    }
 }

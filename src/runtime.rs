@@ -335,3 +335,16 @@ pub(crate) async fn get_runtime_info() -> Result<RuntimeSummary> {
         config: (*client).as_ref().map(|c| c.config.clone()),
     })
 }
+
+pub(crate) async fn validate_container_filters(name: &str) -> bool {
+    let mut client = CLIENT.lock().await;
+    match *client {
+        Some(ref mut conn) => match &mut conn.client {
+            #[cfg(feature = "docker")]
+            Client::Docker(client) => client.validate_container_filters(name),
+            #[cfg(feature = "cri")]
+            Client::Cri(client) => client.validate_container_filters(name),
+        },
+        _ => false,
+    }
+}
