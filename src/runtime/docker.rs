@@ -1,4 +1,4 @@
-use std::{env, fmt::Display, fs, io::Write, path::PathBuf};
+use std::{collections::HashMap, env, fmt::Display, fs, io::Write, path::PathBuf};
 
 use bollard::{
     container::{
@@ -27,7 +27,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::utils::get_or_not_found;
 
-use super::{ContainerSummary, ImageSummary, NetworkSummary, VolumeSummary};
+use super::{ContainerSummary, Filter, ImageSummary, NetworkSummary, VolumeSummary};
 
 const DEFAULT_TIMEOUT: u64 = 120;
 const DEFAULT_DOCKER_SOCKET_PATH: &str = "/var/run/docker.sock";
@@ -39,6 +39,11 @@ const DEFAULT_PODMAN_DESKTOP_SOCKET_PATH: &str =
     ".local/share/containers/podman/machine/podman.sock";
 #[cfg(target_os = "macos")]
 const DEFAULT_ORBSTACK_DESKTOP_SOCKET_PATH: &str = ".orbstack/run/docker.sock";
+
+const AVAILABLE_CONTAINER_FILTERS: [&str; 14] = [
+    "ancestor", "before", "expose", "exited", "health", "id", "is-task", "label", "name",
+    "network", "publish", "since", "status", "volume",
+];
 
 #[derive(Clone, Debug)]
 pub enum ConnectionConfig {
@@ -270,15 +275,13 @@ impl Client {
         all: bool,
         filter: &Option<String>,
     ) -> Result<Vec<ContainerSummary>> {
+        let filters = container_filters(filter);
         let options: ListContainersOptions<String> = ListContainersOptions {
             all,
+            filters,
             ..Default::default()
         };
-        let containers = self
-            .client
-            .list_containers(Some(options))
-            .await
-            .expect("Unable to get container list");
+        let containers = self.client.list_containers(Some(options)).await?;
         let containers = containers
             .iter()
             .map(|c| ContainerSummary {
@@ -288,10 +291,6 @@ impl Client {
                 image_id: get_or_not_found!(c.image_id),
                 status: c.state.clone().unwrap_or("unknown".into()).into(),
                 age: c.created.unwrap_or_default(),
-            })
-            .filter(|c| match filter {
-                Some(f) => c.name.contains(f) || c.image.contains(f) || c.image_id.contains(f),
-                None => true,
             })
             .collect();
         Ok(containers)
@@ -390,6 +389,31 @@ impl Client {
         let version = info.server_version.unwrap_or("Unknown".to_string());
         let name = "docker".to_string();
         Ok((name, version))
+    }
+
+    pub(crate) fn validate_container_filters(&self, filter: &str) -> bool {
+        let mut split = filter.split('=');
+        match (split.next(), split.next()) {
+            (Some(s), Some(_)) => AVAILABLE_CONTAINER_FILTERS.contains(&s),
+            (None, Some(_)) => false,
+            (Some(_), None) | (None, None) => true,
+        }
+    }
+}
+
+pub fn container_filters(filter: &Option<String>) -> HashMap<String, Vec<String>> {
+    match filter {
+        None => HashMap::new(),
+        Some(s) => {
+            let mut split = s.split('=');
+            match (split.next(), split.next()) {
+                (Some(k), Some(v)) => Filter::default()
+                    .filter(k.to_string(), v.to_string())
+                    .into(),
+                (None, Some(_)) => Filter::default().into(),
+                (Some(_), None) | (None, None) => Filter::default().name(s.to_string()).into(),
+            }
+        }
     }
 }
 

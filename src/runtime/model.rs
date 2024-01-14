@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chrono::{DateTime, Utc};
 
 use humansize::{FormatSizeI, BINARY};
@@ -9,6 +11,52 @@ use ratatui::{
 };
 
 use super::ConnectionConfig;
+
+#[allow(dead_code)]
+#[derive(Clone, Debug, Default)]
+pub struct Filter {
+    filter: HashMap<String, String>,
+}
+
+#[allow(dead_code)]
+impl Filter {
+    pub fn filter(mut self, key: String, value: String) -> Self {
+        self.filter.insert(key, value);
+        self
+    }
+
+    pub fn name(self, name: String) -> Self {
+        self.filter("name".to_string(), name)
+    }
+
+    pub fn image(self, image: String) -> Self {
+        self.filter("ancestor".to_string(), image)
+    }
+
+    pub fn compose(self) -> Self {
+        self.filter(
+            "labels".to_string(),
+            "com.docker.compose.project".to_string(),
+        )
+    }
+
+    pub fn compose_project(self, project: String) -> Self {
+        self.filter(
+            "labels".to_string(),
+            format!("{}={}", "com.docker.compose.project", project).to_string(),
+        )
+    }
+}
+
+impl From<Filter> for HashMap<String, Vec<String>> {
+    fn from(value: Filter) -> Self {
+        value
+            .filter
+            .into_iter()
+            .map(|(k, v)| (k, vec![v]))
+            .collect()
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct RuntimeSummary {
