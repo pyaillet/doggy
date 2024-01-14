@@ -38,11 +38,24 @@ brew install pyaillet/doggy
 
 ### Docker connection
 
+#### Linux
+
 By default `doggy` will try the following in order:
 1. Check for existence of the environment variables `DOCKER_HOST` and `DOCKER_CERT_PATH`, if both are defined it will try to connect to the address in the `DOCKER_HOST` variable and use `ca.pem`, `cert.pem` and `key.pem` in `DOCKER_CERT_PATH` to establish a secure connection to the docker daemon.
 2. Check for existence of the environment variables `DOCKER_HOST`, if only this one is defined it will try to connect to the address in the `DOCKER_HOST` variable to establish *an insecure connection* to the docker daemon.
 3. If the variables are not defined, it will search for the local socket `unix:///var/run/docker.sock`
 4. If the socket is not found, it will search for the CRI socket `unix:///var/run/containerd/containerd.sock`
+
+#### MacOS
+
+By default `doggy` will check the existence of a socket file in the following in order:
+1. Docker socket file `unix:///var/run/docker.sock`
+2. Rancher Desktop docker socket file `unix://${HOME}/.rd/docker.sock`
+3. Podman Desktop docker socket file `unix://${HOME}/.local/share/containers/podman/machine/podman.sock`
+4. Orbstack docker socket file `unix://${HOME}/.orbstack/run/docker.sock`
+4. Containerd CRI socket `unix:///var/run/containerd/containerd.sock`
+
+#### Other
 
 It's also possible to specify where to find the sockets with command args:
 - `--docker <docker socket path>`
