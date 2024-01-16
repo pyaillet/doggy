@@ -8,6 +8,8 @@ use crate::action::Action;
 
 use crate::components::container_exec::ContainerExec;
 use crate::components::container_inspect::ContainerDetails;
+use crate::components::container_logs::ContainerLogs;
+use crate::components::container_view::ContainerView;
 use crate::components::containers::Containers;
 use crate::components::image_inspect::ImageInspect;
 use crate::components::images::Images;
@@ -17,11 +19,10 @@ use crate::components::volume_inspect::VolumeInspect;
 use crate::components::volumes::Volumes;
 use crate::tui;
 
-use self::container_logs::ContainerLogs;
-
 pub mod container_exec;
 pub mod container_inspect;
 pub mod container_logs;
+pub mod container_view;
 pub mod containers;
 pub mod image_inspect;
 pub mod images;
@@ -36,6 +37,7 @@ pub(crate) enum Component {
     ContainerExec(ContainerExec),
     ContainerInspect(ContainerDetails),
     ContainerLogs(ContainerLogs),
+    ContainerView(ContainerView),
     Images(Images),
     ImageInspect(ImageInspect),
     Networks(Networks),
@@ -78,6 +80,7 @@ impl Component {
                 ContainerExec,
                 ContainerInspect,
                 ContainerLogs,
+                ContainerView,
                 Images,
                 ImageInspect,
                 Networks,
@@ -96,6 +99,7 @@ impl Component {
                 ContainerExec,
                 ContainerInspect,
                 ContainerLogs,
+                ContainerView,
                 Images,
                 ImageInspect,
                 Networks,
@@ -114,6 +118,7 @@ impl Component {
                 ContainerExec,
                 ContainerInspect,
                 ContainerLogs,
+                ContainerView,
                 Images,
                 ImageInspect,
                 Networks,
@@ -141,6 +146,7 @@ impl Component {
                 Containers,
                 ContainerInspect,
                 ContainerLogs,
+                ContainerView,
                 Images,
                 ImageInspect,
                 Networks,
@@ -169,7 +175,14 @@ impl Component {
     pub(crate) fn get_bindings(&self) -> Option<&[(&str, &str)]> {
         component_delegate!(
             self.get_bindings(),
-            [Containers, ContainerLogs, Images, Networks, Volumes],
+            [
+                Containers,
+                ContainerLogs,
+                ContainerView,
+                Images,
+                Networks,
+                Volumes
+            ],
             None
         )
     }
@@ -177,7 +190,7 @@ impl Component {
     pub(crate) fn get_action(&self, k: &KeyEvent) -> Option<Action> {
         component_delegate!(
             self.get_action(k),
-            [Containers, ContainerLogs, Images],
+            [Containers, ContainerLogs, ContainerView, Images],
             None
         )
     }

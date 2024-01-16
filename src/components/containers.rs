@@ -18,14 +18,15 @@ use crate::{runtime::ContainerSummary, utils::table};
 
 use crate::components::{
     container_exec::ContainerExec, container_inspect::ContainerDetails,
-    container_logs::ContainerLogs, Component,
+    container_logs::ContainerLogs, container_view::ContainerView, Component,
 };
 
-const CONTAINER_CONSTRAINTS: [Constraint; 4] = [
+const CONTAINER_CONSTRAINTS: [Constraint; 5] = [
     Constraint::Min(14),
     Constraint::Max(30),
     Constraint::Percentage(50),
     Constraint::Min(14),
+    Constraint::Min(8),
 ];
 
 #[derive(Clone, Debug)]
@@ -65,6 +66,7 @@ pub enum SortColumn {
     Name(SortOrder),
     Image(SortOrder),
     Status(SortOrder),
+    Age(SortOrder),
 }
 
 #[derive(Clone, Debug)]
@@ -244,6 +246,7 @@ impl Containers {
                 SortColumn::Name(o) => (a.name.cmp(&b.name), o),
                 SortColumn::Image(o) => (a.image.cmp(&b.image), o),
                 SortColumn::Status(o) => (a.status.cmp(&b.status), o),
+                SortColumn::Age(o) => (a.age.cmp(&b.age), o),
             };
             match o {
                 SortOrder::Asc => cmp_result,
@@ -327,6 +330,14 @@ impl Containers {
                     )))?;
                 }
             }
+            (Action::Ok, Popup::None) => {
+                if let Some((cid, _)) = self.get_selected_container_info() {
+                    let cid = cid.to_string();
+                    tx.send(Action::Screen(Component::ContainerView(
+                        ContainerView::new(cid),
+                    )))?;
+                }
+            }
             (Action::Shell, Popup::None) => {
                 if let Some(action) = self.get_selected_container_info().map(|cinfo| {
                     Action::Screen(Component::ContainerExec(ContainerExec::new(
@@ -381,6 +392,8 @@ impl Containers {
                     (3, _) => SortColumn::Image(SortOrder::Asc),
                     (4, SortColumn::Status(SortOrder::Asc)) => SortColumn::Status(SortOrder::Desc),
                     (4, _) => SortColumn::Status(SortOrder::Asc),
+                    (5, SortColumn::Age(SortOrder::Asc)) => SortColumn::Age(SortOrder::Desc),
+                    (5, _) => SortColumn::Age(SortOrder::Asc),
                     _ => self.sort_by.clone(),
                 }
             }
@@ -404,7 +417,7 @@ impl Containers {
                     "".to_string()
                 }
             ),
-            ["Id", "Name", "Image", "Status"],
+            ["Id", "Name", "Image", "Status", "Age"],
             self.containers.iter().map(|c| c.into()).collect(),
             &CONTAINER_CONSTRAINTS,
             Some(Style::new().gray()),
@@ -453,6 +466,7 @@ impl Containers {
 
     pub(crate) fn get_bindings(&self) -> Option<&[(&str, &str)]> {
         Some(&[
+            ("Enter", "Container view"),
             ("ctrl+d", "Delete"),
             ("i", "Inspect"),
             ("l", "Logs"),
@@ -471,6 +485,7 @@ impl Containers {
             KeyCode::Char('l') => Some(Action::Logs),
             KeyCode::Char('s') => Some(Action::Shell),
             KeyCode::Char('S') => Some(Action::CustomShell),
+            KeyCode::Enter => Some(Action::Ok),
             _ => None,
         }
     }

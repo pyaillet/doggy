@@ -2,7 +2,7 @@
 Output ./doc/preview.gif
 
 # Set up a 1200x600 terminal with 46px font.
-Set FontSize 14
+Set FontSize 12
 Set Width 1200
 Set Height 800
 Set TypingSpeed 100ms
@@ -55,6 +55,16 @@ Type "a"
 Sleep 3s
 
 Type "a"
+Sleep 1s
+
+# -- Show container details
+Enter
+Sleep 5s
+
+Escape
+Sleep 1s
+
+Escape
 Sleep 1s
 
 # -- Show delete running container

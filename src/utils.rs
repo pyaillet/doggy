@@ -1,5 +1,6 @@
 use std::{path::PathBuf, rc::Rc};
 
+use chrono::{TimeZone, Utc};
 use color_eyre::Result;
 
 use directories::ProjectDirs;
@@ -337,4 +338,25 @@ pub fn initialize_logging() -> Result<()> {
 
     tracing_registry.init();
     Ok(())
+}
+
+pub trait Age {
+    fn age(&self) -> String;
+}
+
+impl Age for i64 {
+    fn age(&self) -> String {
+        let now = Utc::now();
+        let created = Utc
+            .timestamp_opt(*self, 0)
+            .single()
+            .expect("Unable to convert to timestamp");
+        let delta = now - created;
+        match delta {
+            _ if delta.num_seconds() < 60 => format!("{}s", delta.num_seconds()),
+            _ if delta.num_minutes() < 60 => format!("{}m", delta.num_minutes()),
+            _ if delta.num_hours() < 24 => format!("{}h", delta.num_hours()),
+            _ => format!("{}d", delta.num_days()),
+        }
+    }
 }

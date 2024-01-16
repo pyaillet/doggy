@@ -12,12 +12,14 @@ use bollard::{
     volume::{ListVolumesOptions, RemoveVolumeOptions},
     Docker,
 };
+use chrono::DateTime;
 use color_eyre::Result;
 use crossterm::{
     cursor::{self, MoveTo},
     terminal::{Clear, ClearType},
     ExecutableCommand,
 };
+use eyre::eyre;
 use futures::{Stream, StreamExt};
 use tokio::{
     io::{stdin, AsyncReadExt, AsyncWriteExt},
@@ -27,7 +29,9 @@ use tokio_util::sync::CancellationToken;
 
 use crate::utils::get_or_not_found;
 
-use super::{ContainerSummary, Filter, ImageSummary, NetworkSummary, VolumeSummary};
+use super::{
+    ContainerDetails, ContainerSummary, Filter, ImageSummary, NetworkSummary, VolumeSummary,
+};
 
 const DEFAULT_TIMEOUT: u64 = 120;
 const DEFAULT_DOCKER_SOCKET_PATH: &str = "/var/run/docker.sock";
@@ -158,17 +162,20 @@ impl Client {
         let result = self.client.list_volumes(Some(options)).await?;
         let volumes = result
             .volumes
-            .unwrap_or(vec![])
+            .unwrap_or_default()
             .iter()
             .map(|v: &Volume| VolumeSummary {
                 id: v.name.to_owned(),
                 driver: v.driver.to_owned(),
-                size: v
-                    .usage_data
-                    .to_owned()
-                    .map(|usage| usage.size)
+                created: v
+                    .created_at
+                    .as_ref()
+                    .map(|d| {
+                        DateTime::parse_from_rfc3339(d)
+                            .unwrap_or_default()
+                            .timestamp()
+                    })
                     .unwrap_or_default(),
-                created: v.created_at.to_owned().unwrap_or("<Unknown>".to_string()),
             })
             .collect();
         Ok(volumes)
@@ -198,7 +205,15 @@ impl Client {
                 id: n.id.to_owned().unwrap_or("<Unknown>".to_string()),
                 name: n.name.to_owned().unwrap_or("<Unknown>".to_string()),
                 driver: n.driver.to_owned().unwrap_or("<Unknown>".to_string()),
-                created: n.created.to_owned().unwrap_or("<Unknown>".to_string()),
+                created: n
+                    .created
+                    .as_ref()
+                    .map(|d| {
+                        DateTime::parse_from_rfc3339(d)
+                            .unwrap_or_default()
+                            .timestamp()
+                    })
+                    .unwrap_or_default(),
             })
             .filter(|n| match filter {
                 Some(f) => n.name.contains(f),
@@ -304,6 +319,40 @@ impl Client {
         Ok(serde_json::to_string_pretty(&container_details)?)
     }
 
+    pub(crate) async fn get_container_details(&self, cid: &str) -> Result<ContainerDetails> {
+        let container_details = self
+            .client
+            .inspect_container(cid, Some(InspectContainerOptions { size: false }))
+            .await?;
+        let config = container_details
+            .config
+            .ok_or(eyre!("No container configuration"))?;
+        let status = parse_state(container_details.state);
+        let container_top = match status {
+            super::ContainerStatus::Running => self
+                .client
+                .top_processes(cid, Some(bollard::container::TopOptions { ps_args: "aux" }))
+                .await
+                .ok(),
+            _ => None,
+        };
+        Ok(ContainerDetails {
+            id: cid.to_string(),
+            name: parse_name(container_details.name),
+            age: parse_created(container_details.created),
+            image: config.image,
+            image_id: container_details.image,
+            entrypoint: config.entrypoint,
+            command: config.cmd,
+            status,
+            env: parse_env(config.env),
+            ports: parse_ports(config.exposed_ports),
+            network: parse_networks(container_details.network_settings),
+            volumes: parse_mounts(container_details.mounts),
+            processes: parse_processes(container_top.and_then(|t| t.processes)),
+        })
+    }
+
     pub(crate) fn get_container_logs(
         &self,
         cid: &str,
@@ -399,6 +448,99 @@ impl Client {
             (Some(_), None) | (None, None) => true,
         }
     }
+}
+
+fn parse_processes(processes: Option<Vec<Vec<String>>>) -> Vec<(String, String, String)> {
+    processes
+        .map(|ps| {
+            ps.into_iter()
+                .map(|p| {
+                    (
+                        p.first().cloned().unwrap_or_default(),
+                        p.get(1).cloned().unwrap_or_default(),
+                        p.get(10).cloned().unwrap_or_default(),
+                    )
+                })
+                .collect::<Vec<(String, String, String)>>()
+        })
+        .unwrap_or_default()
+}
+
+fn parse_mounts(mounts: Option<Vec<bollard::service::MountPoint>>) -> Vec<(String, String)> {
+    let mut mounts: Vec<(String, String)> = mounts
+        .map(|m| {
+            m.into_iter()
+                .map(|m| {
+                    (
+                        m.source.unwrap_or_default(),
+                        m.destination.unwrap_or_default(),
+                    )
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    mounts.sort();
+    mounts
+}
+
+fn parse_networks(
+    network_settings: Option<bollard::service::NetworkSettings>,
+) -> Vec<(String, Option<String>)> {
+    let mut nets: Vec<(String, Option<String>)> = network_settings
+        .and_then(|n| {
+            n.networks
+                .map(|n| n.into_iter().map(|(k, v)| (k, v.ip_address)).collect())
+        })
+        .unwrap_or_default();
+    nets.sort();
+    nets
+}
+
+fn parse_ports(exposed_ports: Option<HashMap<String, HashMap<(), ()>>>) -> Vec<(String, String)> {
+    let mut ports: Vec<(String, String)> = exposed_ports
+        .map(|ports| ports.keys().cloned().map(|p| (p, String::new())).collect())
+        .unwrap_or_default();
+    ports.sort();
+    ports
+}
+
+fn parse_state(state: Option<bollard::service::ContainerState>) -> super::ContainerStatus {
+    match state {
+        Some(state) => state
+            .status
+            .map_or(super::ContainerStatus::Unknown, |s| s.into()),
+        None => super::ContainerStatus::Unknown,
+    }
+}
+
+fn parse_created(created: Option<String>) -> Option<i64> {
+    created
+        .as_ref()
+        .and_then(|c| DateTime::parse_from_rfc3339(c).ok())
+        .map(|d| d.timestamp())
+}
+
+fn parse_name(name: Option<String>) -> String {
+    name.and_then(|s| s.split('/').last().map(String::from))
+        .unwrap_or("<UNKNOWN>".to_string())
+}
+
+fn parse_env(env: Option<Vec<String>>) -> Vec<(String, String)> {
+    let mut envs: Vec<(String, String)> = env
+        .map(|env| {
+            env.iter()
+                .map(|env| {
+                    let mut var = env.split('=');
+                    (
+                        var.next().unwrap_or("<NONE>").to_string(),
+                        var.next().unwrap_or("").to_string(),
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    envs.sort();
+    envs
 }
 
 pub fn container_filters(filter: &Option<String>) -> HashMap<String, Vec<String>> {
