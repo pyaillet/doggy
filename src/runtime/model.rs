@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 
-use chrono::{DateTime, Utc};
-
 use humansize::{FormatSizeI, BINARY};
 
 use ratatui::{
     style::{Style, Stylize},
-    text::Span,
+    text::{Line, Span},
     widgets::Row,
 };
+
+use crate::utils::Age;
 
 use super::ConnectionConfig;
 
@@ -69,8 +69,7 @@ pub struct RuntimeSummary {
 pub struct VolumeSummary {
     pub id: String,
     pub driver: String,
-    pub size: i64,
-    pub created: String,
+    pub created: i64,
 }
 
 impl<'a> From<&VolumeSummary> for Row<'a> {
@@ -78,15 +77,9 @@ impl<'a> From<&VolumeSummary> for Row<'a> {
         let VolumeSummary {
             id,
             driver,
-            size,
             created,
         } = value.clone();
-        Row::new(vec![
-            id.gray(),
-            driver.gray(),
-            size.format_size_i(BINARY).gray(),
-            created.gray(),
-        ])
+        Row::new(vec![id.gray(), driver.gray(), created.age().gray()])
     }
 }
 
@@ -95,7 +88,7 @@ pub struct NetworkSummary {
     pub id: String,
     pub name: String,
     pub driver: String,
-    pub created: String,
+    pub created: i64,
 }
 
 impl<'a> From<&NetworkSummary> for Row<'a> {
@@ -106,7 +99,12 @@ impl<'a> From<&NetworkSummary> for Row<'a> {
             driver,
             created,
         } = value.clone();
-        Row::new(vec![id.gray(), name.gray(), driver.gray(), created.gray()])
+        Row::new(vec![
+            id.gray(),
+            name.gray(),
+            driver.gray(),
+            created.age().gray(),
+        ])
     }
 }
 
@@ -130,10 +128,7 @@ impl<'a> From<&ImageSummary> for Row<'a> {
             id.gray(),
             name.gray(),
             size.format_size_i(BINARY).gray(),
-            DateTime::<Utc>::from_timestamp(created, 0)
-                .expect("Unable to parse timestamp")
-                .to_string()
-                .gray(),
+            created.age().gray(),
         ])
     }
 }
@@ -216,8 +211,131 @@ impl<'a> From<&ContainerSummary> for Row<'a> {
             name,
             image,
             status,
+            age,
             ..
         } = value.clone();
-        Row::new(vec![id.gray(), name.gray(), image.gray(), status.format()])
+        Row::new(vec![
+            id.gray(),
+            name.gray(),
+            image.gray(),
+            status.format(),
+            age.age().gray(),
+        ])
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ContainerDetails {
+    pub id: String,
+    pub name: String,
+    pub image: Option<String>,
+    pub image_id: Option<String>,
+    pub status: ContainerStatus,
+    pub age: Option<i64>,
+    pub ports: Vec<(String, String)>,
+    pub volumes: Vec<(String, String)>,
+    pub env: Vec<(String, String)>,
+    pub entrypoint: Option<Vec<String>>,
+    pub command: Option<Vec<String>>,
+    pub network: Vec<(String, Option<String>)>,
+    pub processes: Vec<(String, String, String)>,
+}
+
+impl<'a> From<&ContainerDetails> for Vec<Line<'a>> {
+    fn from(val: &ContainerDetails) -> Self {
+        let style = Style::default().gray();
+        let mut text: Vec<Line> = vec![
+            Line::styled(format!("Id: {}", &val.id[0..12]).to_string(), style),
+            Line::styled(format!("Name: {}", val.name).to_string(), style),
+            Line::from(vec![Span::styled("Status: ", style), val.status.format()]),
+        ];
+        if let Some(age) = val.age {
+            text.push(Line::styled(
+                format!("Created: {}", age.age()).to_string(),
+                style,
+            ));
+        }
+        match (val.image.as_ref(), val.image_id.as_ref()) {
+            (Some(image), Some(_image_id)) => {
+                text.push(Line::styled(format!("Image: {}", image).to_string(), style))
+            }
+            (Some(image), None) => {
+                text.push(Line::styled(format!("Image: {}", image).to_string(), style))
+            }
+            (None, Some(image_id)) => text.push(Line::styled(
+                format!("Image: {}", image_id).to_string(),
+                style,
+            )),
+            (None, None) => {}
+        }
+        if let Some(entrypoint) = &val.entrypoint {
+            if !entrypoint.is_empty() {
+                text.push(Line::styled("Entrypoint:", style));
+                text.append(
+                    &mut entrypoint
+                        .iter()
+                        .map(|entry| Line::styled(format!("  - {}", entry).to_string(), style))
+                        .collect(),
+                );
+            }
+        }
+        if let Some(command) = &val.command {
+            if !command.is_empty() {
+                text.push(Line::styled("Command:".to_string(), style));
+                text.append(
+                    &mut command
+                        .iter()
+                        .map(|cmd| Line::styled(format!("  - {}", cmd).to_string(), style))
+                        .collect(),
+                );
+            }
+        }
+        if !val.env.is_empty() {
+            text.push(Line::styled("Environment:".to_string(), style));
+            text.append(
+                &mut val
+                    .env
+                    .iter()
+                    .map(|(k, v)| Line::styled(format!("  {}: {}", k, v), style))
+                    .collect(),
+            );
+        }
+        if !val.volumes.is_empty() {
+            text.push(Line::styled("Volumes:".to_string(), style));
+            text.append(
+                &mut val
+                    .volumes
+                    .iter()
+                    .map(|(s, d)| Line::styled(format!("  - {}:{}", s, d), style))
+                    .collect(),
+            );
+        }
+        if !val.network.is_empty() {
+            text.push(Line::styled("Networks:".to_string(), style));
+            text.append(
+                &mut val
+                    .network
+                    .iter()
+                    .flat_map(|(n, ip)| match ip {
+                        Some(ip) => vec![
+                            Line::styled(format!("  - Name: {}", n), style),
+                            Line::styled(format!("    IPAddress: {}", ip), style),
+                        ],
+                        None => vec![Line::styled(format!("  - Name: {}", n), style)],
+                    })
+                    .collect(),
+            );
+        }
+        if !val.ports.is_empty() {
+            text.push(Line::styled("Ports:".to_string(), style));
+            text.append(
+                &mut val
+                    .ports
+                    .iter()
+                    .map(|(h, c)| Line::styled(format!("  - {}:{}", h, c), style))
+                    .collect(),
+            );
+        }
+        text
     }
 }

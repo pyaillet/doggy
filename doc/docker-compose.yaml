@@ -10,6 +10,7 @@ services:
       DOCKER_HOST: tcp://dind-rootless:2376
       DOCKER_CERT_PATH: /certs/client/
     working_dir: /vhs
+    privileged: true
     volumes:
       - ../:/vhs
       - certs:/certs

@@ -12,10 +12,9 @@ use crate::components::{Component, VolumeInspect};
 use crate::runtime::{delete_volume, get_volume, list_volumes, VolumeSummary};
 use crate::utils::{centered_rect, table};
 
-const VOLUME_CONSTRAINTS: [Constraint; 4] = [
+const VOLUME_CONSTRAINTS: [Constraint; 3] = [
     Constraint::Max(15),
     Constraint::Min(35),
-    Constraint::Max(10),
     Constraint::Max(20),
 ];
 
@@ -35,7 +34,6 @@ pub enum SortOrder {
 pub enum SortColumn {
     Id(SortOrder),
     Driver(SortOrder),
-    Size(SortOrder),
     Age(SortOrder),
 }
 
@@ -133,7 +131,6 @@ impl Volumes {
             let (cmp_result, o) = match &self.sort_by {
                 SortColumn::Id(o) => (a.id.cmp(&b.id), o),
                 SortColumn::Driver(o) => (a.driver.cmp(&b.driver), o),
-                SortColumn::Size(o) => (a.size.cmp(&b.size), o),
                 SortColumn::Age(o) => (a.created.cmp(&b.created), o),
             };
             match o {
@@ -215,10 +212,8 @@ impl Volumes {
                     (1, _) => SortColumn::Id(SortOrder::Asc),
                     (2, SortColumn::Driver(SortOrder::Asc)) => SortColumn::Driver(SortOrder::Desc),
                     (2, _) => SortColumn::Driver(SortOrder::Asc),
-                    (3, SortColumn::Size(SortOrder::Asc)) => SortColumn::Size(SortOrder::Desc),
-                    (3, _) => SortColumn::Size(SortOrder::Asc),
-                    (4, SortColumn::Age(SortOrder::Asc)) => SortColumn::Age(SortOrder::Desc),
-                    (4, _) => SortColumn::Age(SortOrder::Asc),
+                    (3, SortColumn::Age(SortOrder::Asc)) => SortColumn::Age(SortOrder::Desc),
+                    (3, _) => SortColumn::Age(SortOrder::Asc),
                     _ => self.sort_by.clone(),
                 }
             }
@@ -240,7 +235,7 @@ impl Volumes {
                     None => "".to_string(),
                 }
             ),
-            ["Id", "Driver", "Size", "Age"],
+            ["Id", "Driver", "Age"],
             self.volumes.iter().map(|v| v.into()).collect(),
             &VOLUME_CONSTRAINTS,
             Some(Style::new().gray()),

@@ -289,6 +289,19 @@ pub(crate) async fn get_container(cid: &str) -> Result<String> {
     }
 }
 
+pub(crate) async fn get_container_details(cid: &str) -> Result<ContainerDetails> {
+    let mut client = CLIENT.lock().await;
+    match *client {
+        Some(ref mut conn) => match &mut conn.client {
+            #[cfg(feature = "docker")]
+            Client::Docker(client) => client.get_container_details(cid).await,
+            #[cfg(feature = "cri")]
+            Client::Cri(_client) => unimplemented!(),
+        },
+        _ => Err(eyre!("Not initialized")),
+    }
+}
+
 pub(crate) async fn get_container_logs(
     cid: &str,
     options: LogsOptions<String>,

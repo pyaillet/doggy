@@ -5,6 +5,7 @@ preview: doc/preview.gif
 
 doc/preview.gif: prepare-preview doc/preview.tape doc/docker-compose.yaml src/*.rs src/components/*.rs
 	docker compose -f doc/docker-compose.yaml run --build vhs ./doc/preview.tape
+	make clean-preview
 
 prepare-preview:
 	docker compose -f doc/docker-compose.yaml up -d
