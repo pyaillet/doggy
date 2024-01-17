@@ -22,8 +22,7 @@ You can download one of the binary from the release page
 - Install Rust (see [here](https://www.rust-lang.org/tools/install))
 - Install the dependencies
   - [protoc](https://grpc.io/docs/protoc-installation/) with the feature `cri` which as activated by default
-- Build the tool: `cargo build --release`
-- Launch it: `./target/release/doggy`
+- Install the tool: `cargo install --git https://github.com/pyaillet/doggy`
 
 ### Use brew
 
