@@ -19,10 +19,19 @@ You can download one of the binary from the release page
 
 ### Build it on your own:
 
+You can either install it with CRI support if you want to use it with containerd or CRI-O, or without if you only want to use it with Docker and Podman.
+
+#### Without CRI support
+
+- Install Rust (see [here](https://www.rust-lang.org/tools/install))
+- Install the tool: `cargo install --git https://github.com/pyaillet/doggy`
+
+#### With CRI support
+
 - Install Rust (see [here](https://www.rust-lang.org/tools/install))
 - Install the dependencies
-  - [protoc](https://grpc.io/docs/protoc-installation/) with the feature `cri` which as activated by default
-- Install the tool: `cargo install --git https://github.com/pyaillet/doggy`
+  - [protoc](https://grpc.io/docs/protoc-installation/) with the feature `cri`
+- Install the tool: `cargo install --git https://github.com/pyaillet/doggy --features cri`
 
 ### Use brew
 

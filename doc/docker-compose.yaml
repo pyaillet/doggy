@@ -15,7 +15,7 @@ services:
       - ../:/vhs
       - certs:/certs
   dind-rootless:
-    image: docker:24.0-dind-rootless
+    image: docker:24.0-dind
     hostname: dind-rootless
     privileged: true
     command:

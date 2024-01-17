@@ -8,12 +8,12 @@ doc/preview.gif: prepare-preview doc/preview.tape doc/docker-compose.yaml src/*.
 	make clean-preview
 
 prepare-preview:
-	docker compose -f doc/docker-compose.yaml up -d
+	docker compose -f doc/docker-compose.yaml up -d --remove-orphans
 	docker wait doc-docker-1
 
 clean-preview:
 	docker compose -f doc/docker-compose.yaml run --entrypoint /scripts/clean.sh docker
-	docker compose -f doc/docker-compose.yaml down
+	docker compose -f doc/docker-compose.yaml down --remove-orphans --volumes
 	
 
 

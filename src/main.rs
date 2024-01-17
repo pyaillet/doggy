@@ -2,6 +2,8 @@ use app::App;
 
 use clap::{arg, command, Parser};
 use color_eyre::eyre::Result;
+
+#[cfg(feature = "cri")]
 use eyre::eyre;
 
 use utils::{initialize_logging, initialize_panic_handler, GIT_COMMIT_HASH};
@@ -55,11 +57,7 @@ async fn main() -> Result<()> {
     #[cfg(not(feature = "cri"))]
     let config = {
         let Args { docker } = Args::parse();
-        docker.map(|d| {
-            Some(runtime::ConnectionConfig::Docker(
-                docker::ConnectionConfig::socket(d),
-            ))
-        })
+        docker.map(|d| runtime::ConnectionConfig::Docker(docker::ConnectionConfig::socket(d)))
     };
 
     runtime::init(config).await?;

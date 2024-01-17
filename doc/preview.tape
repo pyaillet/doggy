@@ -120,8 +120,6 @@ Enter
 
 Type "j"
 Sleep 1s
-Type "j"
-Sleep 1s
 
 # -- Show error notification
 
