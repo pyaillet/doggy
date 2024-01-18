@@ -51,7 +51,7 @@ tracing-opentelemetry = { version = "0.17.2", optional = true }
 opentelemetry-jaeger = { version = "0.16.0", optional = true }
 
 [features]
-default = ["docker", "cri"]
+default = ["docker"]
 docker = ["dep:bollard"]
 cri = ["dep:k8s-cri", "dep:tonic", "dep:tower"]
 otel = ["tokio/tracing", "dep:opentelemetry", "dep:tracing-opentelemetry", "dep:opentelemetry-jaeger"]
