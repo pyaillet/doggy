@@ -54,7 +54,9 @@ impl ContainerDetails {
         match action {
             Action::PreviousScreen => {
                 if let Some(tx) = self.action_tx.clone() {
-                    tx.send(Action::Screen(Component::Containers(Containers::new(None))))?;
+                    tx.send(Action::Screen(Component::Containers(Containers::new(
+                        Default::default(),
+                    ))))?;
                 }
             }
             Action::Up => {

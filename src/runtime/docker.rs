@@ -30,7 +30,8 @@ use tokio_util::sync::CancellationToken;
 use crate::utils::get_or_not_found;
 
 use super::{
-    ContainerDetails, ContainerSummary, Filter, ImageSummary, NetworkSummary, VolumeSummary,
+    Compose, ContainerDetails, ContainerSummary, Filter, ImageSummary, NetworkSummary,
+    VolumeSummary,
 };
 
 const DEFAULT_TIMEOUT: u64 = 120;
@@ -48,6 +49,15 @@ const AVAILABLE_CONTAINER_FILTERS: [&str; 14] = [
     "ancestor", "before", "expose", "exited", "health", "id", "is-task", "label", "name",
     "network", "publish", "since", "status", "volume",
 ];
+
+const DOCKER_COMPOSE_PROJECT: &str = "com.docker.compose.project";
+const DOCKER_COMPOSE_SERVICE: &str = "com.docker.compose.service";
+const DOCKER_COMPOSE_CONTAINER_RANK: &str = "com.docker.compose.container-number";
+const DOCKER_COMPOSE_WORKING_DIR: &str = "com.docker.compose.project.working_dir";
+const DOCKER_COMPOSE_CONFIG: &str = "com.docker.compose.project.config_files";
+const DOCKER_COMPOSE_ENV: &str = "com.docker.compose.project.environment_file";
+const DOCKER_COMPOSE_VOLUME: &str = "com.docker.compose.volume";
+const DOCKER_COMPOSE_NETWORK: &str = "com.docker.compose.network";
 
 #[derive(Clone, Debug)]
 pub enum ConnectionConfig {
@@ -157,8 +167,10 @@ pub struct Client {
 }
 
 impl Client {
-    pub(crate) async fn list_volumes(&self) -> Result<Vec<VolumeSummary>> {
-        let options: ListVolumesOptions<String> = Default::default();
+    pub(crate) async fn list_volumes(&self, filter: &Filter) -> Result<Vec<VolumeSummary>> {
+        let options: ListVolumesOptions<String> = ListVolumesOptions {
+            filters: filter.clone().into(),
+        };
         let result = self.client.list_volumes(Some(options)).await?;
         let volumes = result
             .volumes
@@ -176,6 +188,7 @@ impl Client {
                             .timestamp()
                     })
                     .unwrap_or_default(),
+                labels: v.labels.clone(),
             })
             .collect();
         Ok(volumes)
@@ -193,11 +206,10 @@ impl Client {
         Ok(())
     }
 
-    pub(crate) async fn list_networks(
-        &self,
-        filter: &Option<String>,
-    ) -> Result<Vec<NetworkSummary>> {
-        let options: ListNetworksOptions<String> = Default::default();
+    pub(crate) async fn list_networks(&self, filter: &Filter) -> Result<Vec<NetworkSummary>> {
+        let options = ListNetworksOptions {
+            filters: filter.clone().into(),
+        };
         let networks = self.client.list_networks(Some(options)).await?;
         let networks = networks
             .iter()
@@ -214,10 +226,7 @@ impl Client {
                             .timestamp()
                     })
                     .unwrap_or_default(),
-            })
-            .filter(|n| match filter {
-                Some(f) => n.name.contains(f),
-                None => true,
+                labels: n.labels.clone().unwrap_or_default(),
             })
             .collect();
         Ok(networks)
@@ -288,12 +297,11 @@ impl Client {
     pub(crate) async fn list_containers(
         &self,
         all: bool,
-        filter: &Option<String>,
+        filter: &Filter,
     ) -> Result<Vec<ContainerSummary>> {
-        let filters = container_filters(filter);
         let options: ListContainersOptions<String> = ListContainersOptions {
             all,
-            filters,
+            filters: filter.clone().into(),
             ..Default::default()
         };
         let containers = self.client.list_containers(Some(options)).await?;
@@ -304,6 +312,7 @@ impl Client {
                 name: get_or_not_found!(c.names, |c| c.first().and_then(|s| s.split('/').last())),
                 image: get_or_not_found!(c.image, |i| i.split('@').next()),
                 image_id: get_or_not_found!(c.image_id),
+                labels: c.labels.clone().unwrap_or_default(),
                 status: c.state.clone().unwrap_or("unknown".into()).into(),
                 age: c.created.unwrap_or_default(),
             })
@@ -319,10 +328,10 @@ impl Client {
         Ok(serde_json::to_string_pretty(&container_details)?)
     }
 
-    pub(crate) async fn get_container_details(&self, cid: &str) -> Result<ContainerDetails> {
+    pub(crate) async fn get_container_details(&self, cid: String) -> Result<ContainerDetails> {
         let container_details = self
             .client
-            .inspect_container(cid, Some(InspectContainerOptions { size: false }))
+            .inspect_container(&cid, Some(InspectContainerOptions { size: false }))
             .await?;
         let config = container_details
             .config
@@ -331,7 +340,10 @@ impl Client {
         let container_top = match status {
             super::ContainerStatus::Running => self
                 .client
-                .top_processes(cid, Some(bollard::container::TopOptions { ps_args: "aux" }))
+                .top_processes(
+                    &cid,
+                    Some(bollard::container::TopOptions { ps_args: "aux" }),
+                )
                 .await
                 .ok(),
             _ => None,
@@ -342,6 +354,7 @@ impl Client {
             age: parse_created(container_details.created),
             image: config.image,
             image_id: container_details.image,
+            labels: config.labels.unwrap_or_default(),
             entrypoint: config.entrypoint,
             command: config.cmd,
             status,
@@ -363,6 +376,85 @@ impl Client {
             Err(e) => Err(color_eyre::Report::from(e)),
             Ok(other) => Ok(other),
         }))
+    }
+
+    pub(crate) async fn list_compose_projects(&self) -> Result<Vec<Compose>> {
+        let c: Vec<ContainerDetails> = futures::future::try_join_all(
+            self.list_containers(true, &Filter::default().compose())
+                .await?
+                .into_iter()
+                .filter(|c| c.labels.get(DOCKER_COMPOSE_PROJECT).is_some())
+                .map(|c| self.get_container_details(c.id.to_string())),
+        )
+        .await?;
+        let v: Vec<VolumeSummary> = self
+            .list_volumes(&Filter::default().compose())
+            .await?
+            .into_iter()
+            .filter(|v| v.labels.get(DOCKER_COMPOSE_PROJECT).is_some())
+            .collect();
+        let n: Vec<NetworkSummary> = self
+            .list_networks(&Filter::default().compose())
+            .await?
+            .into_iter()
+            .filter(|n| n.labels.get(DOCKER_COMPOSE_PROJECT).is_some())
+            .collect();
+
+        let projects = c
+            .into_iter()
+            .fold(HashMap::<String, Compose>::new(), |mut projects, c| {
+                let p = c
+                    .labels
+                    .get(DOCKER_COMPOSE_PROJECT)
+                    .expect("Should not happen because it's been filtered");
+                let (service, num) = extract_compose_service_info(&c.labels);
+                let compose = if let Some(compose_ref) = projects.get_mut(p) {
+                    compose_ref
+                } else {
+                    let (config, wd, env) = extract_compose_info(&c.labels);
+                    let compose = Compose::new(p.to_string(), config, wd, env);
+                    projects.insert(p.to_string(), compose);
+                    projects.get_mut(p).expect("We just put it there")
+                };
+                compose.services.insert((service, num), c);
+                projects
+            });
+        let projects = v.into_iter().fold(projects, |mut projects, v| {
+            let p = v
+                .labels
+                .get(DOCKER_COMPOSE_PROJECT)
+                .expect("Should not happend because it's been filtered");
+            let volume = extract_compose_volume_info(&v.labels);
+            let compose = if let Some(compose_ref) = projects.get_mut(p) {
+                compose_ref
+            } else {
+                let (config, wd, env) = extract_compose_info(&v.labels);
+                let compose = Compose::new(p.to_string(), config, wd, env);
+                projects.insert(p.to_string(), compose);
+                projects.get_mut(p).expect("We just put it there")
+            };
+            compose.volumes.insert(volume, v);
+            projects
+        });
+        let projects = n.into_iter().fold(projects, |mut projects, n| {
+            let p = n
+                .labels
+                .get(DOCKER_COMPOSE_PROJECT)
+                .expect("Should not happend because it's been filtered");
+            let network = extract_compose_network_info(&n.labels);
+            let compose = if let Some(compose_ref) = projects.get_mut(p) {
+                compose_ref
+            } else {
+                let (config, wd, env) = extract_compose_info(&n.labels);
+                let compose = Compose::new(p.to_string(), config, wd, env);
+                projects.insert(p.to_string(), compose);
+                projects.get_mut(p).expect("We just put it there")
+            };
+            compose.networks.insert(network, n);
+            projects
+        });
+
+        Ok(projects.into_values().collect())
     }
 
     pub(crate) async fn container_exec(&self, cid: &str, cmd: &str) -> Result<()> {
@@ -448,6 +540,43 @@ impl Client {
             (Some(_), None) | (None, None) => true,
         }
     }
+}
+
+fn extract_compose_network_info(labels: &HashMap<String, String>) -> String {
+    labels
+        .get(DOCKER_COMPOSE_NETWORK)
+        .expect("Already filtered")
+        .to_string()
+}
+
+fn extract_compose_volume_info(labels: &HashMap<String, String>) -> String {
+    labels
+        .get(DOCKER_COMPOSE_VOLUME)
+        .expect("Already filtered")
+        .to_string()
+}
+
+fn extract_compose_service_info(labels: &HashMap<String, String>) -> (String, String) {
+    (
+        labels
+            .get(DOCKER_COMPOSE_SERVICE)
+            .expect("No service label")
+            .to_string(),
+        labels
+            .get(DOCKER_COMPOSE_CONTAINER_RANK)
+            .expect("No container rank label")
+            .to_string(),
+    )
+}
+
+fn extract_compose_info(
+    labels: &HashMap<String, String>,
+) -> (Option<String>, Option<String>, Option<String>) {
+    (
+        labels.get(DOCKER_COMPOSE_CONFIG).cloned(),
+        labels.get(DOCKER_COMPOSE_WORKING_DIR).cloned(),
+        labels.get(DOCKER_COMPOSE_ENV).cloned(),
+    )
 }
 
 fn parse_processes(processes: Option<Vec<Vec<String>>>) -> Vec<(String, String, String)> {
@@ -541,22 +670,6 @@ fn parse_env(env: Option<Vec<String>>) -> Vec<(String, String)> {
         .unwrap_or_default();
     envs.sort();
     envs
-}
-
-pub fn container_filters(filter: &Option<String>) -> HashMap<String, Vec<String>> {
-    match filter {
-        None => HashMap::new(),
-        Some(s) => {
-            let mut split = s.split('=');
-            match (split.next(), split.next()) {
-                (Some(k), Some(v)) => Filter::default()
-                    .filter(k.to_string(), v.to_string())
-                    .into(),
-                (None, Some(_)) => Filter::default().into(),
-                (Some(_), None) | (None, None) => Filter::default().name(s.to_string()).into(),
-            }
-        }
-    }
 }
 
 pub(crate) fn connect(config: &ConnectionConfig) -> Result<Client> {

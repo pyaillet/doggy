@@ -53,7 +53,9 @@ impl VolumeInspect {
         match action {
             Action::PreviousScreen => {
                 if let Some(tx) = self.action_tx.clone() {
-                    tx.send(Action::Screen(Component::Volumes(Volumes::new())))?;
+                    tx.send(Action::Screen(Component::Volumes(Volumes::new(
+                        Default::default(),
+                    ))))?;
                 }
             }
             Action::Up => {

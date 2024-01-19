@@ -11,7 +11,7 @@ use ratatui::{
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::runtime::{
-    delete_container, get_container, list_containers, validate_container_filters,
+    delete_container, get_container, list_containers, validate_container_filters, Filter,
 };
 use crate::{action::Action, utils::centered_rect};
 use crate::{runtime::ContainerSummary, utils::table};
@@ -77,11 +77,11 @@ pub struct Containers {
     show_popup: Popup,
     action_tx: Option<UnboundedSender<Action>>,
     sort_by: SortColumn,
-    filter: Option<String>,
+    filter: Filter,
 }
 
 impl Containers {
-    pub fn new(filter: Option<String>) -> Self {
+    pub fn new(filter: Filter) -> Self {
         Containers {
             all: false,
             state: Default::default(),
@@ -297,12 +297,12 @@ impl Containers {
             (Action::SetFilter(filter), Popup::None) => {
                 if let Some(filter) = filter {
                     if validate_container_filters(&filter).await {
-                        self.filter = Some(filter);
+                        self.filter = filter.into();
                     } else {
                         tx.send(Action::Error(format!("Invalid filter: {}", filter)))?;
                     }
                 } else {
-                    self.filter = filter;
+                    self.filter = Default::default();
                 }
             }
             (Action::Inspect, Popup::None) => {
@@ -411,11 +411,7 @@ impl Containers {
                 "{} ({}{})",
                 self.get_name(),
                 if self.all { "All" } else { "Running" },
-                if let Some(filter) = &self.filter {
-                    format!(" - Filter: {}", filter)
-                } else {
-                    "".to_string()
-                }
+                self.filter.format()
             ),
             ["Id", "Name", "Image", "Status", "Age"],
             self.containers.iter().map(|c| c.into()).collect(),

@@ -1,5 +1,6 @@
 use color_eyre::Result;
 
+use crossterm::event::{self, KeyCode};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Span};
@@ -9,7 +10,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::action::Action;
 use crate::components::{network_inspect::NetworkInspect, Component};
-use crate::runtime::{delete_network, get_network, list_networks, NetworkSummary};
+use crate::runtime::{delete_network, get_network, list_networks, Filter, NetworkSummary};
 use crate::utils::{centered_rect, table};
 
 const NETWORK_CONSTRAINTS: [Constraint; 4] = [
@@ -46,18 +47,18 @@ pub struct Networks {
     show_popup: Popup,
     action_tx: Option<UnboundedSender<Action>>,
     sort_by: SortColumn,
-    filter: Option<String>,
+    filter: Filter,
 }
 
 impl Networks {
-    pub fn new() -> Self {
+    pub fn new(filter: Filter) -> Self {
         Networks {
             state: Default::default(),
             networks: Vec::new(),
             show_popup: Popup::None,
             action_tx: None,
             sort_by: SortColumn::Name(SortOrder::Asc),
-            filter: None,
+            filter,
         }
     }
 
@@ -191,7 +192,7 @@ impl Networks {
                 };
             }
             Action::SetFilter(filter) => {
-                self.filter = filter;
+                self.filter = filter.into();
             }
             Action::Delete => {
                 if let Some((id, _)) = self.get_selected_network_info() {
@@ -236,14 +237,7 @@ impl Networks {
             .constraints([Constraint::Percentage(100)])
             .split(area);
         let t = table(
-            format!(
-                "{}{}",
-                self.get_name(),
-                match &self.filter {
-                    Some(f) => format!(" - Filter: {}", f),
-                    None => "".to_string(),
-                }
-            ),
+            format!("{}{}", self.get_name(), self.filter.format()),
             ["Id", "Name", "Driver", "Age"],
             self.networks.iter().map(|n| n.into()).collect(),
             &NETWORK_CONSTRAINTS,
@@ -263,6 +257,13 @@ impl Networks {
             ("F3", "Sort by network driver"),
             ("F4", "Sort by image age"),
         ])
+    }
+
+    pub(crate) fn get_action(&self, k: &event::KeyEvent) -> Option<Action> {
+        match k.code {
+            KeyCode::Char('i') => Some(Action::Inspect),
+            _ => None,
+        }
     }
 
     pub(crate) fn has_filter(&self) -> bool {

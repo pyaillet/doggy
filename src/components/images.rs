@@ -9,7 +9,7 @@ use ratatui::Frame;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::action::Action;
-use crate::runtime::{delete_image, get_image, list_images, ImageSummary};
+use crate::runtime::{delete_image, get_image, list_images, Filter, ImageSummary};
 
 use crate::components::{containers::Containers, image_inspect::ImageInspect, Component};
 use crate::utils::{centered_rect, table};
@@ -266,7 +266,7 @@ impl Images {
         if let KeyCode::Char('c') = k.code {
             if let Some((id, _)) = self.get_selected_image_info() {
                 Some(Action::Screen(Component::Containers(Containers::new(
-                    Some(format!("ancestor={}", id).to_string()),
+                    Filter::default().filter("ancestor".to_string(), id),
                 ))))
             } else {
                 None

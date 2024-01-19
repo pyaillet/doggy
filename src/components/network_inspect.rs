@@ -54,7 +54,9 @@ impl NetworkInspect {
         match action {
             Action::PreviousScreen => {
                 if let Some(tx) = self.action_tx.clone() {
-                    tx.send(Action::Screen(Component::Networks(Networks::new())))?;
+                    tx.send(Action::Screen(Component::Networks(Networks::new(
+                        Default::default(),
+                    ))))?;
                 }
             }
             Action::Up => {

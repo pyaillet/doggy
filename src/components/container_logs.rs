@@ -141,7 +141,9 @@ impl ContainerLogs {
         match action {
             Action::PreviousScreen => {
                 self.cancel()?;
-                tx.send(Action::Screen(Component::Containers(Containers::new(None))))?;
+                tx.send(Action::Screen(Component::Containers(Containers::new(
+                    Default::default(),
+                ))))?;
             }
             Action::Up => {
                 self.auto_scroll = false;

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
 use humansize::{FormatSizeI, BINARY};
 
@@ -35,16 +35,24 @@ impl Filter {
 
     pub fn compose(self) -> Self {
         self.filter(
-            "labels".to_string(),
+            "label".to_string(),
             "com.docker.compose.project".to_string(),
         )
     }
 
     pub fn compose_project(self, project: String) -> Self {
         self.filter(
-            "labels".to_string(),
+            "label".to_string(),
             format!("{}={}", "com.docker.compose.project", project).to_string(),
         )
+    }
+
+    pub fn format(&self) -> String {
+        if self.filter.is_empty() {
+            String::new()
+        } else {
+            format!(" - Filters: {}", self)
+        }
     }
 }
 
@@ -58,6 +66,48 @@ impl From<Filter> for HashMap<String, Vec<String>> {
     }
 }
 
+impl From<Filter> for String {
+    fn from(value: Filter) -> Self {
+        value
+            .filter
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect::<Vec<String>>()
+            .join("&")
+    }
+}
+
+impl Display for Filter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = self
+            .filter
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect::<Vec<String>>()
+            .join("&");
+        f.write_str(&s)
+    }
+}
+
+impl From<Option<String>> for Filter {
+    fn from(value: Option<String>) -> Self {
+        match value {
+            None => Filter::default(),
+            Some(s) => s.into(),
+        }
+    }
+}
+
+impl From<String> for Filter {
+    fn from(value: String) -> Self {
+        match value.split_once('=') {
+            Some((k, "")) => Filter::default().name(k.to_string()),
+            Some((k, v)) => Filter::default().filter(k.to_string(), v.to_string()),
+            None => Filter::default(),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct RuntimeSummary {
     pub name: String,
@@ -65,11 +115,12 @@ pub struct RuntimeSummary {
     pub config: Option<ConnectionConfig>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct VolumeSummary {
     pub id: String,
     pub driver: String,
     pub created: i64,
+    pub labels: HashMap<String, String>,
 }
 
 impl<'a> From<&VolumeSummary> for Row<'a> {
@@ -78,17 +129,19 @@ impl<'a> From<&VolumeSummary> for Row<'a> {
             id,
             driver,
             created,
+            ..
         } = value.clone();
         Row::new(vec![id.gray(), driver.gray(), created.age().gray()])
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct NetworkSummary {
     pub id: String,
     pub name: String,
     pub driver: String,
     pub created: i64,
+    pub labels: HashMap<String, String>,
 }
 
 impl<'a> From<&NetworkSummary> for Row<'a> {
@@ -98,6 +151,7 @@ impl<'a> From<&NetworkSummary> for Row<'a> {
             name,
             driver,
             created,
+            ..
         } = value.clone();
         Row::new(vec![
             id.gray(),
@@ -194,12 +248,13 @@ impl ContainerStatus {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ContainerSummary {
     pub id: String,
     pub name: String,
     pub image: String,
     pub image_id: String,
+    pub labels: HashMap<String, String>,
     pub status: ContainerStatus,
     pub age: i64,
 }
@@ -224,12 +279,13 @@ impl<'a> From<&ContainerSummary> for Row<'a> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ContainerDetails {
     pub id: String,
     pub name: String,
     pub image: Option<String>,
     pub image_id: Option<String>,
+    pub labels: HashMap<String, String>,
     pub status: ContainerStatus,
     pub age: Option<i64>,
     pub ports: Vec<(String, String)>,
@@ -337,5 +393,46 @@ impl<'a> From<&ContainerDetails> for Vec<Line<'a>> {
             );
         }
         text
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Compose {
+    pub project: String,
+    pub config_file: Option<String>,
+    pub working_dir: Option<String>,
+    pub environment_files: Option<String>,
+    pub services: HashMap<(String, String), ContainerDetails>,
+    pub volumes: HashMap<String, VolumeSummary>,
+    pub networks: HashMap<String, NetworkSummary>,
+}
+
+impl Compose {
+    pub fn new(
+        project: String,
+        config_file: Option<String>,
+        working_dir: Option<String>,
+        environment_files: Option<String>,
+    ) -> Self {
+        Compose {
+            project,
+            config_file,
+            working_dir,
+            environment_files,
+            services: HashMap::new(),
+            volumes: HashMap::new(),
+            networks: HashMap::new(),
+        }
+    }
+}
+
+impl<'a> From<&Compose> for Row<'a> {
+    fn from(value: &Compose) -> Row<'a> {
+        Row::new(vec![
+            value.project.to_string(),
+            value.services.len().to_string(),
+            value.volumes.len().to_string(),
+            value.networks.len().to_string(),
+        ])
     }
 }

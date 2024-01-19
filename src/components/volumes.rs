@@ -1,5 +1,6 @@
 use color_eyre::Result;
 
+use crossterm::event::{self, KeyCode};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Span};
@@ -9,7 +10,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::action::Action;
 use crate::components::{Component, VolumeInspect};
-use crate::runtime::{delete_volume, get_volume, list_volumes, VolumeSummary};
+use crate::runtime::{delete_volume, get_volume, list_volumes, Filter, VolumeSummary};
 use crate::utils::{centered_rect, table};
 
 const VOLUME_CONSTRAINTS: [Constraint; 3] = [
@@ -44,18 +45,18 @@ pub struct Volumes {
     show_popup: Popup,
     action_tx: Option<UnboundedSender<Action>>,
     sort_by: SortColumn,
-    filter: Option<String>,
+    filter: Filter,
 }
 
 impl Volumes {
-    pub fn new() -> Self {
+    pub fn new(filter: Filter) -> Self {
         Volumes {
             state: Default::default(),
             volumes: Vec::new(),
             show_popup: Popup::None,
             action_tx: None,
             sort_by: SortColumn::Id(SortOrder::Asc),
-            filter: None,
+            filter,
         }
     }
 
@@ -151,7 +152,7 @@ impl Volumes {
     pub(crate) async fn update(&mut self, action: Action) -> Result<()> {
         let tx = self.action_tx.clone().expect("No action sender available");
         match action {
-            Action::Tick => match list_volumes().await {
+            Action::Tick => match list_volumes(&self.filter).await {
                 Ok(volumes) => {
                     self.volumes = volumes;
                     self.sort();
@@ -184,7 +185,7 @@ impl Volumes {
                 };
             }
             Action::SetFilter(filter) => {
-                self.filter = filter;
+                self.filter = filter.into();
             }
             Action::Delete => {
                 if let Some(id) = self.get_selected_volume_info() {
@@ -227,14 +228,7 @@ impl Volumes {
             .constraints([Constraint::Percentage(100)])
             .split(area);
         let t = table(
-            format!(
-                "{}{}",
-                self.get_name(),
-                match &self.filter {
-                    Some(f) => format!(" - Filter: {}", f),
-                    None => "".to_string(),
-                }
-            ),
+            format!("{}{}", self.get_name(), self.filter.format(),),
             ["Id", "Driver", "Age"],
             self.volumes.iter().map(|v| v.into()).collect(),
             &VOLUME_CONSTRAINTS,
@@ -251,9 +245,15 @@ impl Volumes {
             ("i", "Inspect/View details"),
             ("F1", "Sort by volume id"),
             ("F2", "Sort by volume driver"),
-            ("F3", "Sort by volume size"),
-            ("F4", "Sort by volume age"),
+            ("F3", "Sort by volume age"),
         ])
+    }
+
+    pub(crate) fn get_action(&self, k: &event::KeyEvent) -> Option<Action> {
+        match k.code {
+            KeyCode::Char('i') => Some(Action::Inspect),
+            _ => None,
+        }
     }
 
     pub(crate) fn has_filter(&self) -> bool {
