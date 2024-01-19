@@ -6,6 +6,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::action::Action;
 
+use crate::components::composes::Composes;
 use crate::components::container_exec::ContainerExec;
 use crate::components::container_inspect::ContainerDetails;
 use crate::components::container_logs::ContainerLogs;
@@ -19,6 +20,7 @@ use crate::components::volume_inspect::VolumeInspect;
 use crate::components::volumes::Volumes;
 use crate::tui;
 
+pub mod composes;
 pub mod container_exec;
 pub mod container_inspect;
 pub mod container_logs;
@@ -38,6 +40,7 @@ pub(crate) enum Component {
     ContainerInspect(ContainerDetails),
     ContainerLogs(ContainerLogs),
     ContainerView(ContainerView),
+    Composes(Composes),
     Images(Images),
     ImageInspect(ImageInspect),
     Networks(Networks),
@@ -81,6 +84,7 @@ impl Component {
                 ContainerInspect,
                 ContainerLogs,
                 ContainerView,
+                Composes,
                 Images,
                 ImageInspect,
                 Networks,
@@ -100,6 +104,7 @@ impl Component {
                 ContainerInspect,
                 ContainerLogs,
                 ContainerView,
+                Composes,
                 Images,
                 ImageInspect,
                 Networks,
@@ -119,6 +124,7 @@ impl Component {
                 ContainerInspect,
                 ContainerLogs,
                 ContainerView,
+                Composes,
                 Images,
                 ImageInspect,
                 Networks,
@@ -147,6 +153,7 @@ impl Component {
                 ContainerInspect,
                 ContainerLogs,
                 ContainerView,
+                Composes,
                 Images,
                 ImageInspect,
                 Networks,
@@ -179,6 +186,7 @@ impl Component {
                 Containers,
                 ContainerLogs,
                 ContainerView,
+                Composes,
                 Images,
                 Networks,
                 Volumes
@@ -190,7 +198,15 @@ impl Component {
     pub(crate) fn get_action(&self, k: &KeyEvent) -> Option<Action> {
         component_delegate!(
             self.get_action(k),
-            [Containers, ContainerLogs, ContainerView, Images],
+            [
+                Containers,
+                ContainerLogs,
+                ContainerView,
+                Composes,
+                Images,
+                Networks,
+                Volumes
+            ],
             None
         )
     }

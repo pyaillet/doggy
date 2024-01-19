@@ -62,7 +62,9 @@ impl ContainerExec {
 
             self.should_stop = true;
             tx.send(Action::Resume)?;
-            tx.send(Action::Screen(Component::Containers(Containers::new(None))))?;
+            tx.send(Action::Screen(Component::Containers(Containers::new(
+                Default::default(),
+            ))))?;
             if let Err(e) = res {
                 tx.send(Action::Error(format!(
                     "Unable to execute command \"{}\" in container \"{}\"\n{}",

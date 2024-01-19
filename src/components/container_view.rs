@@ -49,7 +49,9 @@ impl ContainerView {
         let tx = self.action_tx.clone().expect("No action sender");
         match action {
             Action::PreviousScreen => {
-                tx.send(Action::Screen(Component::Containers(Containers::new(None))))?;
+                tx.send(Action::Screen(Component::Containers(Containers::new(
+                    Default::default(),
+                ))))?;
             }
             Action::Tick => match get_container_details(&self.id).await {
                 Ok(details) => self.details = Some(details),

@@ -5,12 +5,15 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 use tokio::sync::mpsc::{self, UnboundedSender};
 
 use crate::action::Action;
+use crate::components::composes::Composes;
 use crate::components::containers::Containers;
 use crate::components::images::Images;
 use crate::components::networks::Networks;
 use crate::components::volumes::Volumes;
 use crate::components::Component;
-use crate::runtime::{get_suggestions, RuntimeSummary, CONTAINERS, IMAGES, NETWORKS, VOLUMES};
+use crate::runtime::{
+    get_suggestions, RuntimeSummary, COMPOSES, CONTAINERS, IMAGES, NETWORKS, VOLUMES,
+};
 use crate::tui;
 use crate::utils::{default_layout, help_screen, toast};
 
@@ -72,7 +75,7 @@ impl App {
         tui.frame_rate(self.frame_rate);
         tui.enter()?;
 
-        let mut main: Component = Component::Containers(Containers::new(None));
+        let mut main: Component = Component::Containers(Containers::new(Default::default()));
         main.register_action_handler(action_tx.clone());
 
         let info = crate::runtime::get_runtime_info().await?;
@@ -339,7 +342,13 @@ impl App {
             match self.suggestion {
                 Some(CONTAINERS) => {
                     self.reset_input();
-                    Some(Action::Screen(Component::Containers(Containers::new(None))))
+                    Some(Action::Screen(Component::Containers(Containers::new(
+                        Default::default(),
+                    ))))
+                }
+                Some(COMPOSES) => {
+                    self.reset_input();
+                    Some(Action::Screen(Component::Composes(Composes::new())))
                 }
                 Some(IMAGES) => {
                     self.reset_input();
@@ -347,11 +356,15 @@ impl App {
                 }
                 Some(VOLUMES) => {
                     self.reset_input();
-                    Some(Action::Screen(Component::Volumes(Volumes::new())))
+                    Some(Action::Screen(Component::Volumes(Volumes::new(
+                        Default::default(),
+                    ))))
                 }
                 Some(NETWORKS) => {
                     self.reset_input();
-                    Some(Action::Screen(Component::Networks(Networks::new())))
+                    Some(Action::Screen(Component::Networks(Networks::new(
+                        Default::default(),
+                    ))))
                 }
                 _ => None,
             }

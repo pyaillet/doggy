@@ -22,6 +22,7 @@ lazy_static! {
 }
 
 pub const CONTAINERS: &str = "containers";
+pub const COMPOSES: &str = "composes";
 pub const IMAGES: &str = "images";
 pub const NETWORKS: &str = "networks";
 pub const VOLUMES: &str = "volumes";
@@ -31,7 +32,7 @@ pub(crate) async fn get_suggestions() -> &'static [&'static str] {
     match *client {
         Some(ref conn) => match &conn.client {
             #[cfg(feature = "docker")]
-            Client::Docker(_) => &[CONTAINERS, IMAGES, NETWORKS, VOLUMES],
+            Client::Docker(_) => &[CONTAINERS, COMPOSES, IMAGES, NETWORKS, VOLUMES],
             #[cfg(feature = "cri")]
             Client::Cri(_) => &[CONTAINERS, IMAGES],
         },
@@ -129,12 +130,12 @@ pub async fn init(config: Option<ConnectionConfig>) -> Result<()> {
     }
 }
 
-pub(crate) async fn list_volumes() -> Result<Vec<VolumeSummary>> {
+pub(crate) async fn list_volumes(filter: &Filter) -> Result<Vec<VolumeSummary>> {
     let client = CLIENT.lock().await;
     match *client {
         Some(ref conn) => match &conn.client {
             #[cfg(feature = "docker")]
-            Client::Docker(client) => client.list_volumes().await,
+            Client::Docker(client) => client.list_volumes(filter).await,
             #[cfg(feature = "cri")]
             _ => unimplemented!(),
         },
@@ -169,7 +170,7 @@ pub(crate) async fn delete_volume(id: &str) -> Result<()> {
     }
 }
 
-pub(crate) async fn list_networks(filter: &Option<String>) -> Result<Vec<NetworkSummary>> {
+pub(crate) async fn list_networks(filter: &Filter) -> Result<Vec<NetworkSummary>> {
     let client = CLIENT.lock().await;
     match *client {
         Some(ref conn) => match &conn.client {
@@ -260,10 +261,7 @@ pub(crate) async fn delete_container(cid: &str) -> Result<()> {
     }
 }
 
-pub(crate) async fn list_containers(
-    all: bool,
-    filter: &Option<String>,
-) -> Result<Vec<ContainerSummary>> {
+pub(crate) async fn list_containers(all: bool, filter: &Filter) -> Result<Vec<ContainerSummary>> {
     let mut client = CLIENT.lock().await;
     match *client {
         Some(ref mut conn) => match &mut conn.client {
@@ -294,7 +292,7 @@ pub(crate) async fn get_container_details(cid: &str) -> Result<ContainerDetails>
     match *client {
         Some(ref mut conn) => match &mut conn.client {
             #[cfg(feature = "docker")]
-            Client::Docker(client) => client.get_container_details(cid).await,
+            Client::Docker(client) => client.get_container_details(cid.to_string()).await,
             #[cfg(feature = "cri")]
             Client::Cri(_client) => unimplemented!(),
         },
@@ -324,6 +322,19 @@ pub(crate) async fn container_exec(cid: &str, cmd: &str) -> Result<()> {
         Some(ref conn) => match &conn.client {
             #[cfg(feature = "docker")]
             Client::Docker(client) => client.container_exec(cid, cmd).await,
+            #[cfg(feature = "cri")]
+            _ => unimplemented!(),
+        },
+        _ => Err(eyre!("Not initialized")),
+    }
+}
+
+pub(crate) async fn list_compose_projects() -> Result<Vec<Compose>> {
+    let client = CLIENT.lock().await;
+    match *client {
+        Some(ref conn) => match &conn.client {
+            #[cfg(feature = "docker")]
+            Client::Docker(client) => client.list_compose_projects().await,
             #[cfg(feature = "cri")]
             _ => unimplemented!(),
         },
