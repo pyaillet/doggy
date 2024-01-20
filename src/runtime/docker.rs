@@ -8,7 +8,7 @@ use bollard::{
     exec::{CreateExecOptions, ResizeExecOptions, StartExecResults},
     image::{ListImagesOptions, RemoveImageOptions},
     network::{InspectNetworkOptions, ListNetworksOptions},
-    service::{Network, Volume},
+    service::{HealthStatusEnum, Network, Volume},
     volume::{ListVolumesOptions, RemoveVolumeOptions},
     Docker,
 };
@@ -30,8 +30,8 @@ use tokio_util::sync::CancellationToken;
 use crate::utils::get_or_not_found;
 
 use super::{
-    Compose, ContainerDetails, ContainerSummary, Filter, ImageSummary, NetworkSummary,
-    VolumeSummary,
+    Compose, ContainerDetails, ContainerHealth, ContainerStatus, ContainerSummary, Filter,
+    ImageSummary, NetworkSummary, VolumeSummary,
 };
 
 const DEFAULT_TIMEOUT: u64 = 120;
@@ -338,7 +338,7 @@ impl Client {
             .ok_or(eyre!("No container configuration"))?;
         let status = parse_state(container_details.state);
         let container_top = match status {
-            super::ContainerStatus::Running => self
+            super::ContainerStatus::Running(_) => self
                 .client
                 .top_processes(
                     &cid,
@@ -634,11 +634,37 @@ fn parse_ports(exposed_ports: Option<HashMap<String, HashMap<(), ()>>>) -> Vec<(
 }
 
 fn parse_state(state: Option<bollard::service::ContainerState>) -> super::ContainerStatus {
-    match state {
-        Some(state) => state
-            .status
-            .map_or(super::ContainerStatus::Unknown, |s| s.into()),
-        None => super::ContainerStatus::Unknown,
+    if state.is_none() {
+        return ContainerStatus::Unknown;
+    }
+    let state = state.unwrap();
+    let status = if let Some(status) = state.status {
+        status.into()
+    } else {
+        ContainerStatus::Unknown
+    };
+    match status {
+        ContainerStatus::Running(ContainerHealth::Unknown) => {
+            if let Some(h) = state.health {
+                match h.status {
+                    Some(HealthStatusEnum::NONE) | Some(HealthStatusEnum::EMPTY) | None => {
+                        ContainerStatus::Running(ContainerHealth::Unknown)
+                    }
+                    Some(HealthStatusEnum::HEALTHY) => {
+                        ContainerStatus::Running(ContainerHealth::Healthy)
+                    }
+                    Some(HealthStatusEnum::UNHEALTHY) => {
+                        ContainerStatus::Running(ContainerHealth::Unhealthy)
+                    }
+                    Some(HealthStatusEnum::STARTING) => {
+                        ContainerStatus::Running(ContainerHealth::Starting)
+                    }
+                }
+            } else {
+                ContainerStatus::Running(ContainerHealth::Unknown)
+            }
+        }
+        s => s,
     }
 }
 

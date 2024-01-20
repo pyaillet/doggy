@@ -1,5 +1,6 @@
 use std::{collections::HashMap, fmt::Display};
 
+use bollard::service::ContainerStateStatusEnum;
 use humansize::{FormatSizeI, BINARY};
 
 use ratatui::{
@@ -189,9 +190,18 @@ impl<'a> From<&ImageSummary> for Row<'a> {
 
 #[allow(dead_code)]
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub enum ContainerHealth {
+    Unknown,
+    Healthy,
+    Unhealthy,
+    Starting,
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 pub enum ContainerStatus {
     Created,
-    Running,
+    Running(ContainerHealth),
     Paused,
     Restarting,
     Removing,
@@ -200,14 +210,11 @@ pub enum ContainerStatus {
     Unknown,
 }
 
-impl<T> From<T> for ContainerStatus
-where
-    T: AsRef<str>,
-{
-    fn from(value: T) -> Self {
+impl From<String> for ContainerStatus {
+    fn from(value: String) -> Self {
         match value.as_ref() {
             "created" => ContainerStatus::Created,
-            "running" => ContainerStatus::Running,
+            "running" => ContainerStatus::Running(ContainerHealth::Unknown),
             "paused" => ContainerStatus::Paused,
             "restarting" => ContainerStatus::Restarting,
             "removing" => ContainerStatus::Removing,
@@ -218,11 +225,31 @@ where
     }
 }
 
+impl From<ContainerStateStatusEnum> for ContainerStatus {
+    fn from(value: ContainerStateStatusEnum) -> Self {
+        match value {
+            ContainerStateStatusEnum::DEAD => ContainerStatus::Dead,
+            ContainerStateStatusEnum::EMPTY => ContainerStatus::Unknown,
+            ContainerStateStatusEnum::EXITED => ContainerStatus::Exited,
+            ContainerStateStatusEnum::CREATED => ContainerStatus::Created,
+            ContainerStateStatusEnum::PAUSED => ContainerStatus::Paused,
+            ContainerStateStatusEnum::RUNNING => ContainerStatus::Running(ContainerHealth::Unknown),
+            ContainerStateStatusEnum::REMOVING => ContainerStatus::Removing,
+            ContainerStateStatusEnum::RESTARTING => ContainerStatus::Restarting,
+        }
+    }
+}
+
 impl From<ContainerStatus> for String {
     fn from(value: ContainerStatus) -> Self {
         match value {
             ContainerStatus::Created => "created".into(),
-            ContainerStatus::Running => "running".into(),
+            ContainerStatus::Running(h) => match h {
+                ContainerHealth::Unknown => "running".into(),
+                ContainerHealth::Healthy => "running (healthy)".into(),
+                ContainerHealth::Unhealthy => "running (unhealthy)".into(),
+                ContainerHealth::Starting => "running (starting)".into(),
+            },
             ContainerStatus::Paused => "paused".into(),
             ContainerStatus::Restarting => "restarting".into(),
             ContainerStatus::Removing => "removing".into(),
@@ -237,7 +264,16 @@ impl ContainerStatus {
     fn format(&self) -> Span<'static> {
         match self {
             ContainerStatus::Created => Span::styled("created", Style::new().dark_gray()),
-            ContainerStatus::Running => Span::styled("running", Style::new().green()),
+            ContainerStatus::Running(h) => match h {
+                ContainerHealth::Unknown => Span::styled("running", Style::new().green()),
+                ContainerHealth::Healthy => Span::styled("running (healthy)", Style::new().green()),
+                ContainerHealth::Unhealthy => {
+                    Span::styled("running (unhealthy)", Style::new().yellow())
+                }
+                ContainerHealth::Starting => {
+                    Span::styled("running (starting)", Style::new().green())
+                }
+            },
             ContainerStatus::Paused => Span::styled("paused", Style::new().dark_gray()),
             ContainerStatus::Restarting => Span::styled("restarting", Style::new().yellow()),
             ContainerStatus::Removing => Span::styled("removing", Style::new().red()),
@@ -373,11 +409,14 @@ impl<'a> From<&ContainerDetails> for Vec<Line<'a>> {
                     .network
                     .iter()
                     .flat_map(|(n, ip)| match ip {
+                        None => vec![Line::styled(format!("  - Name: {}", n), style)],
+                        Some(ip) if ip.is_empty() => {
+                            vec![Line::styled(format!("  - Name: {}", n), style)]
+                        }
                         Some(ip) => vec![
                             Line::styled(format!("  - Name: {}", n), style),
                             Line::styled(format!("    IPAddress: {}", ip), style),
                         ],
-                        None => vec![Line::styled(format!("  - Name: {}", n), style)],
                     })
                     .collect(),
             );
