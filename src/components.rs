@@ -6,6 +6,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::action::Action;
 
+use crate::components::compose_view::ComposeView;
 use crate::components::composes::Composes;
 use crate::components::container_exec::ContainerExec;
 use crate::components::container_inspect::ContainerDetails;
@@ -20,6 +21,7 @@ use crate::components::volume_inspect::VolumeInspect;
 use crate::components::volumes::Volumes;
 use crate::tui;
 
+pub mod compose_view;
 pub mod composes;
 pub mod container_exec;
 pub mod container_inspect;
@@ -41,6 +43,7 @@ pub(crate) enum Component {
     ContainerLogs(ContainerLogs),
     ContainerView(ContainerView),
     Composes(Composes),
+    ComposeView(ComposeView),
     Images(Images),
     ImageInspect(ImageInspect),
     Networks(Networks),
@@ -85,6 +88,7 @@ impl Component {
                 ContainerLogs,
                 ContainerView,
                 Composes,
+                ComposeView,
                 Images,
                 ImageInspect,
                 Networks,
@@ -105,6 +109,7 @@ impl Component {
                 ContainerLogs,
                 ContainerView,
                 Composes,
+                ComposeView,
                 Images,
                 ImageInspect,
                 Networks,
@@ -125,6 +130,7 @@ impl Component {
                 ContainerLogs,
                 ContainerView,
                 Composes,
+                ComposeView,
                 Images,
                 ImageInspect,
                 Networks,
@@ -154,6 +160,7 @@ impl Component {
                 ContainerLogs,
                 ContainerView,
                 Composes,
+                ComposeView,
                 Images,
                 ImageInspect,
                 Networks,

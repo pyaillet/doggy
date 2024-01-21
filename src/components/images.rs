@@ -263,16 +263,18 @@ impl Images {
     }
 
     pub(crate) fn get_action(&self, k: &crossterm::event::KeyEvent) -> Option<Action> {
-        if let KeyCode::Char('c') = k.code {
-            if let Some((id, _)) = self.get_selected_image_info() {
-                Some(Action::Screen(Component::Containers(Containers::new(
-                    Filter::default().filter("ancestor".to_string(), id),
-                ))))
-            } else {
-                None
+        match k.code {
+            KeyCode::Char('c') => {
+                if let Some((id, _)) = self.get_selected_image_info() {
+                    Some(Action::Screen(Component::Containers(Containers::new(
+                        Filter::default().filter("ancestor".to_string(), id),
+                    ))))
+                } else {
+                    None
+                }
             }
-        } else {
-            None
+            KeyCode::Char('i') => Some(Action::Inspect),
+            _ => None,
         }
     }
 

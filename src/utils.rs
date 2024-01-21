@@ -9,6 +9,12 @@ use lazy_static::lazy_static;
 #[cfg(feature = "otel")]
 use opentelemetry::global;
 
+use tracing::error;
+use tracing_error::ErrorLayer;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
+
+use crate::components::Component;
+
 use ratatui::{
     prelude::*,
     widgets::{
@@ -69,12 +75,8 @@ macro_rules! get_or_not_found {
             .to_string()
     };
 }
-pub(crate) use get_or_not_found;
-use tracing::error;
-use tracing_error::ErrorLayer;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
-use crate::components::Component;
+pub(crate) use get_or_not_found;
 
 pub(crate) fn table<'a, const SIZE: usize>(
     title: String,

@@ -15,7 +15,10 @@ use crate::{
     utils::table,
 };
 
-use super::{containers::Containers, networks::Networks, volumes::Volumes, Component};
+use super::{
+    compose_view::ComposeView, containers::Containers, networks::Networks, volumes::Volumes,
+    Component,
+};
 
 const COMPOSES_CONSTRAINTS: [Constraint; 4] = [
     Constraint::Min(20),
@@ -72,11 +75,10 @@ impl Composes {
         }
     }
 
-    fn get_selected_compose_info(&self) -> Option<String> {
+    fn get_selected_compose_info(&self) -> Option<Compose> {
         self.state
             .selected()
             .and_then(|i| self.composes.get(i).cloned())
-            .map(|c| c.project)
     }
 
     pub(crate) fn get_name(&self) -> &'static str {
@@ -115,6 +117,7 @@ impl Composes {
             Action::Up => {
                 self.previous();
             }
+            Action::Ok => {}
             _ => {}
         }
         Ok(())
@@ -144,10 +147,12 @@ impl Composes {
     }
 
     pub(crate) fn get_action(&self, k: &event::KeyEvent) -> Option<Action> {
-        if let Some(project) = self.get_selected_compose_info() {
-            let filter = Filter::default().compose_project(project);
+        if let Some(compose) = self.get_selected_compose_info() {
+            let filter = Filter::default().compose_project(compose.project.clone());
             match k.code {
-                KeyCode::Enter => Some(Action::Ok),
+                KeyCode::Enter => Some(Action::Screen(Component::ComposeView(ComposeView::new(
+                    compose,
+                )))),
                 KeyCode::Char('c') => Some(Action::Screen(Component::Containers(Containers::new(
                     filter,
                 )))),

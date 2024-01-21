@@ -56,8 +56,6 @@ const DOCKER_COMPOSE_CONTAINER_RANK: &str = "com.docker.compose.container-number
 const DOCKER_COMPOSE_WORKING_DIR: &str = "com.docker.compose.project.working_dir";
 const DOCKER_COMPOSE_CONFIG: &str = "com.docker.compose.project.config_files";
 const DOCKER_COMPOSE_ENV: &str = "com.docker.compose.project.environment_file";
-const DOCKER_COMPOSE_VOLUME: &str = "com.docker.compose.volume";
-const DOCKER_COMPOSE_NETWORK: &str = "com.docker.compose.network";
 
 #[derive(Clone, Debug)]
 pub enum ConnectionConfig {
@@ -424,7 +422,6 @@ impl Client {
                 .labels
                 .get(DOCKER_COMPOSE_PROJECT)
                 .expect("Should not happend because it's been filtered");
-            let volume = extract_compose_volume_info(&v.labels);
             let compose = if let Some(compose_ref) = projects.get_mut(p) {
                 compose_ref
             } else {
@@ -433,7 +430,7 @@ impl Client {
                 projects.insert(p.to_string(), compose);
                 projects.get_mut(p).expect("We just put it there")
             };
-            compose.volumes.insert(volume, v);
+            compose.volumes.insert(v.id.to_string(), v);
             projects
         });
         let projects = n.into_iter().fold(projects, |mut projects, n| {
@@ -441,7 +438,6 @@ impl Client {
                 .labels
                 .get(DOCKER_COMPOSE_PROJECT)
                 .expect("Should not happend because it's been filtered");
-            let network = extract_compose_network_info(&n.labels);
             let compose = if let Some(compose_ref) = projects.get_mut(p) {
                 compose_ref
             } else {
@@ -450,7 +446,7 @@ impl Client {
                 projects.insert(p.to_string(), compose);
                 projects.get_mut(p).expect("We just put it there")
             };
-            compose.networks.insert(network, n);
+            compose.networks.insert(n.name.to_string(), n);
             projects
         });
 
@@ -540,20 +536,6 @@ impl Client {
             (Some(_), None) | (None, None) => true,
         }
     }
-}
-
-fn extract_compose_network_info(labels: &HashMap<String, String>) -> String {
-    labels
-        .get(DOCKER_COMPOSE_NETWORK)
-        .expect("Already filtered")
-        .to_string()
-}
-
-fn extract_compose_volume_info(labels: &HashMap<String, String>) -> String {
-    labels
-        .get(DOCKER_COMPOSE_VOLUME)
-        .expect("Already filtered")
-        .to_string()
 }
 
 fn extract_compose_service_info(labels: &HashMap<String, String>) -> (String, String) {
