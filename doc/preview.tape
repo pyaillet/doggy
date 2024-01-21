@@ -110,7 +110,27 @@ Sleep 8s
 
 Escape
 
-# -- Show change resource/autocomplete
+# -- Show change resource/autocomplete and compose list
+Type ":"
+Sleep 1s
+Type "comp"
+
+Sleep 1s
+Enter
+
+# -- Show compose detail
+Sleep 2s
+Enter
+
+PageDown
+Sleep 800ms
+PageDown
+Sleep 800ms
+
+Sleep 8s
+Escape
+
+# -- Show image list
 Type ":"
 Sleep 1s
 Type "im"

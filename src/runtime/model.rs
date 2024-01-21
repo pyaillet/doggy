@@ -136,6 +136,21 @@ impl<'a> From<&VolumeSummary> for Row<'a> {
     }
 }
 
+fn volume_detail_to_lines<'a>(val: &VolumeSummary, indent: usize) -> Vec<Line<'a>> {
+    vec![Line::from(format!(
+        "{:indent$}Driver: {}",
+        "",
+        val.driver,
+        indent = indent
+    ))]
+}
+
+impl<'a> From<&VolumeSummary> for Vec<Line<'a>> {
+    fn from(val: &VolumeSummary) -> Vec<Line<'a>> {
+        volume_detail_to_lines(val, 2)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct NetworkSummary {
     pub id: String,
@@ -160,6 +175,21 @@ impl<'a> From<&NetworkSummary> for Row<'a> {
             driver.gray(),
             created.age().gray(),
         ])
+    }
+}
+
+fn network_detail_to_lines<'a>(val: &NetworkSummary, indent: usize) -> Vec<Line<'a>> {
+    vec![Line::from(format!(
+        "{:indent$}Driver: {}",
+        "",
+        val.driver,
+        indent = indent
+    ))]
+}
+
+impl<'a> From<&NetworkSummary> for Vec<Line<'a>> {
+    fn from(val: &NetworkSummary) -> Vec<Line<'a>> {
+        network_detail_to_lines(val, 2)
     }
 }
 
@@ -315,6 +345,172 @@ impl<'a> From<&ContainerSummary> for Row<'a> {
     }
 }
 
+fn details_to_lines<'a>(val: &ContainerDetails, indent: usize) -> Vec<Line<'a>> {
+    let style = Style::default().gray();
+    let mut text: Vec<Line> = vec![
+        Line::styled(
+            format!("{:indent$}Id: {}", "", &val.id[0..12], indent = indent).to_string(),
+            style,
+        ),
+        Line::styled(
+            format!("{:indent$}Name: {}", "", val.name, indent = indent).to_string(),
+            style,
+        ),
+        Line::from(vec![
+            Span::styled(format!("{:indent$}Status: ", "", indent = indent), style),
+            val.status.format(),
+        ]),
+    ];
+    if let Some(age) = val.age {
+        text.push(Line::styled(
+            format!("{:indent$}Created: {}", "", age.age(), indent = indent),
+            style,
+        ));
+    }
+    match (val.image.as_ref(), val.image_id.as_ref()) {
+        (Some(image), Some(_image_id)) => text.push(Line::styled(
+            format!("{:indent$}Image: {}", "", image, indent = indent),
+            style,
+        )),
+        (Some(image), None) => text.push(Line::styled(
+            format!("{:indent$}Image: {}", "", image, indent = indent),
+            style,
+        )),
+        (None, Some(image_id)) => text.push(Line::styled(
+            format!("{:indent$}Image: {}", "", image_id, indent = indent),
+            style,
+        )),
+        (None, None) => {}
+    }
+    if let Some(entrypoint) = &val.entrypoint {
+        if !entrypoint.is_empty() {
+            text.push(Line::styled(
+                format!("{:indent$}Entrypoint:", "", indent = indent),
+                style,
+            ));
+            text.append(
+                &mut entrypoint
+                    .iter()
+                    .map(|entry| {
+                        Line::styled(
+                            format!("{:indent$}  - {}", "", entry, indent = indent).to_string(),
+                            style,
+                        )
+                    })
+                    .collect(),
+            );
+        }
+    }
+    if let Some(command) = &val.command {
+        if !command.is_empty() {
+            text.push(Line::styled(
+                format!("{:indent$}Command:", "", indent = indent),
+                style,
+            ));
+            text.append(
+                &mut command
+                    .iter()
+                    .map(|cmd| {
+                        Line::styled(
+                            format!("{:indent$}  - {}", "", cmd, indent = indent).to_string(),
+                            style,
+                        )
+                    })
+                    .collect(),
+            );
+        }
+    }
+    if !val.env.is_empty() {
+        text.push(Line::styled(
+            format!("{:indent$}Environment:", "", indent = indent),
+            style,
+        ));
+        text.append(
+            &mut val
+                .env
+                .iter()
+                .map(|(k, v)| {
+                    Line::styled(
+                        format!("{:indent$}  {}: {}", "", k, v, indent = indent),
+                        style,
+                    )
+                })
+                .collect(),
+        );
+    }
+    if !val.volumes.is_empty() {
+        text.push(Line::styled(
+            format!("{:indent$}Volumes:", "", indent = indent),
+            style,
+        ));
+        text.append(
+            &mut val
+                .volumes
+                .iter()
+                .map(|(s, d)| {
+                    Line::styled(
+                        format!("{:indent$}  - {}:{}", "", s, d, indent = indent),
+                        style,
+                    )
+                })
+                .collect(),
+        );
+    }
+    if !val.network.is_empty() {
+        text.push(Line::styled(
+            format!("{:indent$}Networks:", "", indent = indent),
+            style,
+        ));
+        text.append(
+            &mut val
+                .network
+                .iter()
+                .flat_map(|(n, ip)| match ip {
+                    None => vec![Line::styled(
+                        format!("{:indent$}  - Name: {}", "", n, indent = indent),
+                        style,
+                    )],
+                    Some(ip) if ip.is_empty() => {
+                        vec![Line::styled(
+                            format!("{:indent$}  - Name: {}", "", n, indent = indent),
+                            style,
+                        )]
+                    }
+                    Some(ip) => vec![
+                        Line::styled(
+                            format!("{:indent$}  - Name: {}", "", n, indent = indent),
+                            style,
+                        ),
+                        Line::styled(
+                            format!("{:indent$}    IPAddress: {}", "", ip, indent = indent),
+                            style,
+                        ),
+                    ],
+                })
+                .collect(),
+        );
+    }
+    if !val.ports.is_empty() {
+        text.push(Line::styled(
+            format!("{:indent$}Ports:", "", indent = indent),
+            style,
+        ));
+        text.append(
+            &mut val
+                .ports
+                .iter()
+                .map(|(h, c)| {
+                    Line::styled(
+                        format!("{:indent$}  - {}:{}", "", h, c, indent = indent),
+                        style,
+                    )
+                })
+                .collect(),
+        );
+    }
+    text
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct ContainerDetails {
     pub id: String,
@@ -335,103 +531,7 @@ pub struct ContainerDetails {
 
 impl<'a> From<&ContainerDetails> for Vec<Line<'a>> {
     fn from(val: &ContainerDetails) -> Self {
-        let style = Style::default().gray();
-        let mut text: Vec<Line> = vec![
-            Line::styled(format!("Id: {}", &val.id[0..12]).to_string(), style),
-            Line::styled(format!("Name: {}", val.name).to_string(), style),
-            Line::from(vec![Span::styled("Status: ", style), val.status.format()]),
-        ];
-        if let Some(age) = val.age {
-            text.push(Line::styled(
-                format!("Created: {}", age.age()).to_string(),
-                style,
-            ));
-        }
-        match (val.image.as_ref(), val.image_id.as_ref()) {
-            (Some(image), Some(_image_id)) => {
-                text.push(Line::styled(format!("Image: {}", image).to_string(), style))
-            }
-            (Some(image), None) => {
-                text.push(Line::styled(format!("Image: {}", image).to_string(), style))
-            }
-            (None, Some(image_id)) => text.push(Line::styled(
-                format!("Image: {}", image_id).to_string(),
-                style,
-            )),
-            (None, None) => {}
-        }
-        if let Some(entrypoint) = &val.entrypoint {
-            if !entrypoint.is_empty() {
-                text.push(Line::styled("Entrypoint:", style));
-                text.append(
-                    &mut entrypoint
-                        .iter()
-                        .map(|entry| Line::styled(format!("  - {}", entry).to_string(), style))
-                        .collect(),
-                );
-            }
-        }
-        if let Some(command) = &val.command {
-            if !command.is_empty() {
-                text.push(Line::styled("Command:".to_string(), style));
-                text.append(
-                    &mut command
-                        .iter()
-                        .map(|cmd| Line::styled(format!("  - {}", cmd).to_string(), style))
-                        .collect(),
-                );
-            }
-        }
-        if !val.env.is_empty() {
-            text.push(Line::styled("Environment:".to_string(), style));
-            text.append(
-                &mut val
-                    .env
-                    .iter()
-                    .map(|(k, v)| Line::styled(format!("  {}: {}", k, v), style))
-                    .collect(),
-            );
-        }
-        if !val.volumes.is_empty() {
-            text.push(Line::styled("Volumes:".to_string(), style));
-            text.append(
-                &mut val
-                    .volumes
-                    .iter()
-                    .map(|(s, d)| Line::styled(format!("  - {}:{}", s, d), style))
-                    .collect(),
-            );
-        }
-        if !val.network.is_empty() {
-            text.push(Line::styled("Networks:".to_string(), style));
-            text.append(
-                &mut val
-                    .network
-                    .iter()
-                    .flat_map(|(n, ip)| match ip {
-                        None => vec![Line::styled(format!("  - Name: {}", n), style)],
-                        Some(ip) if ip.is_empty() => {
-                            vec![Line::styled(format!("  - Name: {}", n), style)]
-                        }
-                        Some(ip) => vec![
-                            Line::styled(format!("  - Name: {}", n), style),
-                            Line::styled(format!("    IPAddress: {}", ip), style),
-                        ],
-                    })
-                    .collect(),
-            );
-        }
-        if !val.ports.is_empty() {
-            text.push(Line::styled("Ports:".to_string(), style));
-            text.append(
-                &mut val
-                    .ports
-                    .iter()
-                    .map(|(h, c)| Line::styled(format!("  - {}:{}", h, c), style))
-                    .collect(),
-            );
-        }
-        text
+        details_to_lines(val, 0)
     }
 }
 
@@ -473,5 +573,64 @@ impl<'a> From<&Compose> for Row<'a> {
             value.volumes.len().to_string(),
             value.networks.len().to_string(),
         ])
+    }
+}
+
+impl<'a> From<&Compose> for Vec<Line<'a>> {
+    fn from(val: &Compose) -> Self {
+        let mut text = vec![Line::from(format!("Compose project: {}", val.project))];
+        if let Some(config_file) = &val.config_file {
+            text.push(Line::from(format!("Config file: {}", config_file)));
+        }
+        if let Some(working_dir) = &val.working_dir {
+            text.push(Line::from(format!("Working directory: {}", working_dir)));
+        }
+        if let Some(env_file) = &val.environment_files {
+            text.push(Line::from(format!("Environment file: {}", env_file)));
+        }
+        if !val.services.is_empty() {
+            text.push(Line::from("Services:".to_string()));
+            let mut svc_text = val
+                .services
+                .iter()
+                .flat_map(|((svc, num), c)| {
+                    let mut svc_text = vec![Line::from(format!("  {} - {}", svc, num))];
+                    let mut svc_content = details_to_lines(c, 4);
+                    svc_text.append(&mut svc_content);
+                    svc_text
+                })
+                .collect();
+            text.append(&mut svc_text);
+        }
+        if !val.networks.is_empty() {
+            text.push(Line::from("Networks:".to_string()));
+            let mut net_text = val
+                .networks
+                .iter()
+                .flat_map(|(name, net)| {
+                    let mut net_text = vec![Line::from(format!("- Name: {}", name))];
+                    let mut net_content = net.into();
+                    net_text.append(&mut net_content);
+                    net_text
+                })
+                .collect();
+            text.append(&mut net_text);
+        }
+        if !val.volumes.is_empty() {
+            text.push(Line::from("Volumes:".to_string()));
+            let mut vol_text = val
+                .volumes
+                .iter()
+                .flat_map(|(id, vol)| {
+                    let mut vol_text = vec![Line::from(format!("- Id: {}", id))];
+                    let mut vol_content = vol.into();
+                    vol_text.append(&mut vol_content);
+                    vol_text
+                })
+                .collect();
+            text.append(&mut vol_text);
+        }
+
+        text
     }
 }
