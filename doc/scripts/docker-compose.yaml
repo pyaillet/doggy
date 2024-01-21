@@ -10,3 +10,12 @@ services:
       - bash
       - -c
       - apt update && apt install -y curl && while true; do sleep 1; curl whoami/api; done
+  lolcat:
+    image: ubuntu:22.04
+    command:
+      - bash
+      - -c
+      - apt update && apt install -y lolcat && while true; do sleep 1; date | /usr/games/lolcat; done
+    tty: true
+    environment: 
+      TERM: xterm-256color

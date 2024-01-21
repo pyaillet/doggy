@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use ansi_to_tui::IntoText;
 use bollard::container::LogsOptions;
 use chrono::{Duration, Utc};
 use color_eyre::Result;
@@ -219,24 +220,16 @@ impl ContainerLogs {
             ),
         ]))
         .block(Block::default().borders(Borders::NONE).gray());
-        let mut log_paragraph = Paragraph::new(
-            logs.iter()
-                .map(|l| Line::from(Span::from(l)))
-                .collect::<Vec<Line>>(),
-        )
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .gray()
-                .title(Span::styled(
-                    format!(
+        let text = logs.join("").into_text().expect("Cannot parse logs");
+        let mut log_paragraph =
+            Paragraph::new(text).block(Block::default().borders(Borders::ALL).title(Span::styled(
+                format!(
                     "Container logs for: \"{}/{}\" (press 'ESC' to previous screen, 'q' to quit)",
                     &self.id[0..12],
                     self.name
                 ),
-                    Style::default().add_modifier(Modifier::BOLD),
-                )),
-        );
+                Style::default().add_modifier(Modifier::BOLD),
+            )));
         if self.line_wrap {
             log_paragraph = log_paragraph.wrap(Wrap { trim: false });
         }
