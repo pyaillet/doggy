@@ -19,8 +19,8 @@ mod runtime;
 mod tui;
 mod utils;
 
-const DEFAULT_TICK_RATE: f64 = 4.0;
-const DEFAULT_FRAME_RATE: f64 = 30.0;
+const DEFAULT_TICK_RATE: f64 = 2.0;
+const DEFAULT_FRAME_RATE: f64 = 10.0;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]

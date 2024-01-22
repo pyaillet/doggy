@@ -2,8 +2,8 @@ use std::{collections::HashMap, env, fmt::Display, fs, io::Write, path::PathBuf}
 
 use bollard::{
     container::{
-        InspectContainerOptions, ListContainersOptions, LogOutput, LogsOptions,
-        RemoveContainerOptions,
+        InspectContainerOptions, ListContainersOptions, LogOutput, LogsOptions, MemoryStatsStats,
+        RemoveContainerOptions, Stats, StatsOptions,
     },
     exec::{CreateExecOptions, ResizeExecOptions, StartExecResults},
     image::{ListImagesOptions, RemoveImageOptions},
@@ -376,6 +376,18 @@ impl Client {
         }))
     }
 
+    pub(crate) fn get_container_stats(
+        &self,
+        cid: &str,
+        options: Option<StatsOptions>,
+    ) -> Result<impl Stream<Item = Result<Stats>>> {
+        let stream = self.client.stats(cid, options);
+        Ok(stream.map(|item| match item {
+            Err(e) => Err(color_eyre::Report::from(e)),
+            Ok(other) => Ok(other),
+        }))
+    }
+
     pub(crate) async fn list_compose_projects(&self) -> Result<Vec<Compose>> {
         let c: Vec<ContainerDetails> = futures::future::try_join_all(
             self.list_containers(true, &Filter::default().compose())
@@ -713,4 +725,47 @@ pub(crate) fn connect(config: &ConnectionConfig) -> Result<Client> {
         }
     };
     Ok(Client { client: docker })
+}
+
+pub fn compute_cpu(stats: &Stats) -> Option<f64> {
+    let previous_cpu_usage = stats.precpu_stats.cpu_usage.total_usage;
+    let previous_system_usage = stats.precpu_stats.system_cpu_usage;
+    let cpu_delta = stats
+        .cpu_stats
+        .cpu_usage
+        .total_usage
+        .saturating_sub(previous_cpu_usage);
+    let system_delta = stats
+        .cpu_stats
+        .system_cpu_usage?
+        .saturating_sub(previous_system_usage?);
+    let online_cpus = match stats.cpu_stats.online_cpus {
+        Some(online_cpus) if online_cpus > 0 => online_cpus,
+        _ => stats
+            .cpu_stats
+            .cpu_usage
+            .percpu_usage
+            .clone()
+            .unwrap_or_default()
+            .len() as u64,
+    };
+    if system_delta > 0 && cpu_delta > 0 {
+        Some(cpu_delta as f64 / system_delta as f64 * online_cpus as f64 * 100.0)
+    } else {
+        None
+    }
+}
+
+pub fn compute_mem(stats: &Stats) -> Option<u64> {
+    let usage = stats.memory_stats.usage?;
+    let mem_stats = stats.memory_stats.stats?;
+    let cache = match mem_stats {
+        MemoryStatsStats::V1(mem_stats) => mem_stats.total_inactive_file,
+        MemoryStatsStats::V2(mem_stats) => mem_stats.inactive_file,
+    };
+    if cache < usage {
+        Some(usage.saturating_sub(cache))
+    } else {
+        Some(usage)
+    }
 }

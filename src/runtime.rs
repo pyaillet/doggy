@@ -4,7 +4,7 @@ use tokio::sync::Mutex;
 
 use lazy_static::lazy_static;
 
-use bollard::container::{LogOutput, LogsOptions};
+use bollard::container::{LogOutput, LogsOptions, Stats, StatsOptions};
 use color_eyre::Result;
 use eyre::eyre;
 
@@ -309,6 +309,22 @@ pub(crate) async fn get_container_logs(
         Some(ref conn) => match &conn.client {
             #[cfg(feature = "docker")]
             Client::Docker(client) => client.get_container_logs(cid, options),
+            #[cfg(feature = "cri")]
+            _ => unimplemented!(),
+        },
+        _ => Err(eyre!("Not initialized")),
+    }
+}
+
+pub(crate) async fn get_container_stats(
+    cid: &str,
+    options: Option<StatsOptions>,
+) -> Result<impl Stream<Item = Result<Stats>>> {
+    let client = CLIENT.lock().await;
+    match *client {
+        Some(ref conn) => match &conn.client {
+            #[cfg(feature = "docker")]
+            Client::Docker(client) => client.get_container_stats(cid, options),
             #[cfg(feature = "cri")]
             _ => unimplemented!(),
         },
