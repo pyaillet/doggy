@@ -38,10 +38,10 @@ use crate::components::{
 };
 
 const CONTAINER_CONSTRAINTS: [Constraint; 7] = [
-    Constraint::Min(14),
-    Constraint::Max(30),
-    Constraint::Percentage(50),
-    Constraint::Min(14),
+    Constraint::Percentage(20),
+    Constraint::Percentage(20),
+    Constraint::Percentage(20),
+    Constraint::Percentage(20),
     Constraint::Max(4),
     Constraint::Max(5),
     Constraint::Max(9),
@@ -513,7 +513,12 @@ impl Containers {
                         if let Some(mem) = stats.mem_data().next() {
                             let format = FormatSizeOptions::from(BINARY).decimal_places(1);
                             cells.push(Cell::new(format_size(*mem, format)));
+                        } else {
+                            cells.push(Cell::new("-".to_string()));
                         }
+                    } else {
+                        cells.push(Cell::new("-".to_string()));
+                        cells.push(Cell::new("-".to_string()));
                     }
                     Row::new(cells)
                 })

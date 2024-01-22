@@ -12,7 +12,7 @@ Type "doggy"
 
 Enter
 
-Sleep 1s
+Sleep 4s
 
 # -- Show help screen
 
