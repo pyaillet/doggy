@@ -176,7 +176,7 @@ impl Component {
         component_delegate!(self.setup(t), [ContainerExec], Ok(()))
     }
     pub(crate) fn teardown(&mut self, t: &mut tui::Tui) -> Result<()> {
-        component_delegate!(self.teardown(t), [ContainerExec], Ok(()))
+        component_delegate!(self.teardown(t), [ContainerExec, Containers], Ok(()))
     }
 
     pub(crate) fn handle_input(

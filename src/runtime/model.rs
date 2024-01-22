@@ -1,4 +1,7 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{
+    collections::{HashMap, VecDeque},
+    fmt::Display,
+};
 
 use bollard::service::ContainerStateStatusEnum;
 use humansize::{FormatSizeI, BINARY};
@@ -6,7 +9,7 @@ use humansize::{FormatSizeI, BINARY};
 use ratatui::{
     style::{Style, Stylize},
     text::{Line, Span},
-    widgets::Row,
+    widgets::{Cell, Row},
 };
 
 use crate::utils::Age;
@@ -325,8 +328,8 @@ pub struct ContainerSummary {
     pub age: i64,
 }
 
-impl<'a> From<&ContainerSummary> for Row<'a> {
-    fn from(value: &ContainerSummary) -> Row<'a> {
+impl<'a> From<&ContainerSummary> for Vec<Cell<'a>> {
+    fn from(value: &ContainerSummary) -> Vec<Cell<'a>> {
         let ContainerSummary {
             id,
             name,
@@ -335,13 +338,13 @@ impl<'a> From<&ContainerSummary> for Row<'a> {
             age,
             ..
         } = value.clone();
-        Row::new(vec![
-            id.gray(),
-            name.gray(),
-            image.gray(),
-            status.format(),
-            age.age().gray(),
-        ])
+        vec![
+            id.gray().into(),
+            name.gray().into(),
+            image.gray().into(),
+            status.format().into(),
+            age.age().gray().into(),
+        ]
     }
 }
 
@@ -632,5 +635,48 @@ impl<'a> From<&Compose> for Vec<Line<'a>> {
         }
 
         text
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Debug)]
+pub struct ContainerMetrics {
+    cid: String,
+    cpu: VecDeque<f64>,
+    mem: VecDeque<u64>,
+    capacity: usize,
+}
+
+impl ContainerMetrics {
+    pub fn new(cid: String, capacity: usize) -> Self {
+        ContainerMetrics {
+            cid,
+            capacity,
+            cpu: VecDeque::with_capacity(capacity),
+            mem: VecDeque::with_capacity(capacity),
+        }
+    }
+
+    pub fn push_metrics(&mut self, cpu: Option<f64>, mem: Option<u64>) {
+        if let Some(cpu) = cpu {
+            if self.cpu.len() >= self.capacity {
+                let _ = self.cpu.pop_back();
+            }
+            self.cpu.push_front(cpu);
+        }
+        if let Some(mem) = mem {
+            if self.mem.len() >= self.capacity {
+                let _ = self.mem.pop_back();
+            }
+            self.mem.push_front(mem);
+        }
+    }
+
+    pub fn cpu_data(&self) -> impl Iterator<Item = &f64> {
+        self.cpu.iter()
+    }
+
+    pub fn mem_data(&self) -> impl Iterator<Item = &u64> {
+        self.mem.iter()
     }
 }

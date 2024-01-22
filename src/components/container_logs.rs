@@ -13,15 +13,15 @@ use ratatui::layout::{Constraint, Layout};
 use ratatui::widgets::Wrap;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
 use tokio::{select, spawn};
+use tokio_util::sync::CancellationToken;
 
 use ratatui::{
     style::{Modifier, Style, Stylize},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, ScrollbarState},
 };
-use tokio::task::JoinHandle;
-use tokio_util::sync::CancellationToken;
 
 use crate::components::{containers::Containers, Component};
 use crate::{action::Action, runtime::get_container_logs};

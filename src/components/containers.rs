@@ -1,32 +1,50 @@
+use bollard::container::StatsOptions;
 use color_eyre::Result;
 
 use crossterm::event::{self, KeyCode, KeyEventKind};
+use futures::{executor::block_on, future::join_all, StreamExt};
+use humansize::{format_size, FormatSizeOptions, BINARY};
+
+use std::{collections::HashMap, sync::Arc, time::Duration};
+
 use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Style, Stylize},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Padding, Paragraph, TableState, Wrap},
+    widgets::{Block, Borders, Cell, Clear, Padding, Paragraph, Row, TableState, Wrap},
     Frame,
 };
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
+use tokio::{select, spawn};
+use tokio::{sync::mpsc::UnboundedSender, time::sleep};
+use tokio_util::sync::CancellationToken;
 
-use crate::runtime::{
-    delete_container, get_container, list_containers, validate_container_filters, Filter,
-};
 use crate::{action::Action, utils::centered_rect};
 use crate::{runtime::ContainerSummary, utils::table};
+use crate::{
+    runtime::{
+        delete_container,
+        docker::{compute_cpu, compute_mem},
+        get_container, get_container_stats, list_containers, validate_container_filters,
+        ContainerMetrics, Filter,
+    },
+    tui,
+};
 
 use crate::components::{
     container_exec::ContainerExec, container_inspect::ContainerDetails,
     container_logs::ContainerLogs, container_view::ContainerView, Component,
 };
 
-const CONTAINER_CONSTRAINTS: [Constraint; 5] = [
+const CONTAINER_CONSTRAINTS: [Constraint; 7] = [
     Constraint::Min(14),
     Constraint::Max(30),
     Constraint::Percentage(50),
     Constraint::Min(14),
-    Constraint::Min(8),
+    Constraint::Max(4),
+    Constraint::Max(5),
+    Constraint::Max(9),
 ];
 
 #[derive(Clone, Debug)]
@@ -78,10 +96,74 @@ pub struct Containers {
     action_tx: Option<UnboundedSender<Action>>,
     sort_by: SortColumn,
     filter: Filter,
+    metrics: Arc<Mutex<HashMap<String, ContainerMetrics>>>,
+    task: Arc<JoinHandle<Result<()>>>,
+    cancellation_token: CancellationToken,
+}
+
+async fn run_setup_task(
+    metrics: Arc<Mutex<HashMap<String, ContainerMetrics>>>,
+    cancel: CancellationToken,
+) -> Result<()> {
+    let mut should_stop = false;
+    while !should_stop {
+        select!(
+        _ = update_metrics(Arc::clone(&metrics)) => {},
+        _ = cancel.cancelled() => {
+            should_stop = true;
+        }
+        );
+    }
+    Ok(())
+}
+
+async fn update_metrics(metrics: Arc<Mutex<HashMap<String, ContainerMetrics>>>) -> Result<()> {
+    let container_list = list_containers(false, &Filter::default()).await?;
+    let options = Some(StatsOptions {
+        stream: false,
+        one_shot: false,
+    });
+    let stats_futures = join_all(container_list.iter().map(|c| async {
+        match get_container_stats(&c.id, options).await {
+            Ok(mut stats) => match stats.next().await {
+                Some(Ok(stats)) => Some((c.id.clone(), compute_cpu(&stats), compute_mem(&stats))),
+                _ => None,
+            },
+            Err(_) => None,
+        }
+    }))
+    .await;
+
+    let mut map_lock = metrics.lock().await;
+    for cid_stats in stats_futures.into_iter().filter(|s| s.is_some()) {
+        let (cid, cpu_usage, mem_usage) = cid_stats.expect("Already checked and filtered out None");
+        let entry = map_lock.get_mut(&cid);
+        match entry {
+            Some(entry) => entry.push_metrics(cpu_usage, mem_usage),
+            None => {
+                let mut cm = ContainerMetrics::new(cid.clone(), 20);
+                cm.push_metrics(cpu_usage, mem_usage);
+                map_lock.insert(cid, cm);
+            }
+        }
+    }
+    drop(map_lock);
+
+    sleep(Duration::from_millis(1000)).await;
+
+    Ok(())
 }
 
 impl Containers {
     pub fn new(filter: Filter) -> Self {
+        let metrics = Arc::new(Mutex::new(HashMap::new()));
+        let cancel = CancellationToken::new();
+        let _cancel = cancel.clone();
+
+        let _metrics = Arc::clone(&metrics);
+
+        let task = Arc::new(spawn(run_setup_task(_metrics, _cancel)));
+
         Containers {
             all: false,
             state: Default::default(),
@@ -90,6 +172,9 @@ impl Containers {
             action_tx: None,
             sort_by: SortColumn::Name(SortOrder::Asc),
             filter,
+            metrics,
+            task: Arc::clone(&task),
+            cancellation_token: cancel,
         }
     }
 
@@ -403,6 +488,7 @@ impl Containers {
     }
 
     pub(crate) fn draw(&mut self, f: &mut Frame<'_>, area: Rect) {
+        let stats = block_on(async { self.metrics.lock().await.clone() });
         let rects = Layout::default()
             .constraints([Constraint::Percentage(100)])
             .split(area);
@@ -413,8 +499,25 @@ impl Containers {
                 if self.all { "All" } else { "Running" },
                 self.filter.format()
             ),
-            ["Id", "Name", "Image", "Status", "Age"],
-            self.containers.iter().map(|c| c.into()).collect(),
+            ["Id", "Name", "Image", "Status", "Age", "CPU", "MEM"],
+            self.containers
+                .iter()
+                .map(|c| {
+                    let mut cells: Vec<Cell> = c.into();
+                    if let Some(stats) = stats.get(&c.id) {
+                        if let Some(cpu) = stats.cpu_data().next() {
+                            cells.push(Cell::new(format!("{:.1}%", cpu)));
+                        } else {
+                            cells.push(Cell::new("-".to_string()));
+                        }
+                        if let Some(mem) = stats.mem_data().next() {
+                            let format = FormatSizeOptions::from(BINARY).decimal_places(1);
+                            cells.push(Cell::new(format_size(*mem, format)));
+                        }
+                    }
+                    Row::new(cells)
+                })
+                .collect(),
             &CONTAINER_CONSTRAINTS,
             Some(Style::new().gray()),
         );
@@ -458,6 +561,17 @@ impl Containers {
         } else {
             Ok(Some(kevent))
         }
+    }
+
+    fn cancel(&mut self) -> Result<()> {
+        self.cancellation_token.cancel();
+        self.task.abort();
+        Ok(())
+    }
+
+    pub(crate) fn teardown(&mut self, _t: &mut tui::Tui) -> Result<()> {
+        self.cancel()?;
+        Ok(())
     }
 
     pub(crate) fn get_bindings(&self) -> Option<&[(&str, &str)]> {
