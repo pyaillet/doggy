@@ -178,7 +178,7 @@ where
     f.render_widget(lg, pg_area);
 }
 
-pub fn help_screen(f: &mut Frame<'_>, component: &Component) {
+pub(crate) fn help_screen(f: &mut Frame<'_>, component: &Component) {
     let area = default_layout(f.size())[1];
 
     let block = Block::default()
