@@ -24,14 +24,14 @@ You can either install it with CRI support if you want to use it with containerd
 #### Without CRI support
 
 - Install Rust (see [here](https://www.rust-lang.org/tools/install))
-- Install the tool: `cargo install --git https://github.com/pyaillet/doggy`
+- Install the tool: `cargo install --locked --git https://github.com/pyaillet/doggy`
 
 #### With CRI support
 
 - Install Rust (see [here](https://www.rust-lang.org/tools/install))
 - Install the dependencies
   - [protoc](https://grpc.io/docs/protoc-installation/) with the feature `cri`
-- Install the tool: `cargo install --git https://github.com/pyaillet/doggy --features cri`
+- Install the tool: `cargo install --locked --git https://github.com/pyaillet/doggy --features cri`
 
 ### Use brew
 
