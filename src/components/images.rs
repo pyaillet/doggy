@@ -200,10 +200,9 @@ impl Images {
                             "Unable to delete container \"{}\" {}",
                             id, e
                         )))?;
-                    } else {
-                        self.show_popup = Popup::None;
-                        tx.send(Action::Tick)?;
                     }
+                    self.show_popup = Popup::None;
+                    tx.send(Action::Tick)?;
                 };
             }
             Action::PreviousScreen => {

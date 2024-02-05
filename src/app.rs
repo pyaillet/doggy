@@ -129,8 +129,8 @@ impl App {
                     Action::Screen(ref screen) => {
                         let mut new_main = screen.clone();
                         new_main.register_action_handler(action_tx.clone());
-                        main.teardown(&mut tui)?;
                         new_main.setup(&mut tui)?;
+                        main.teardown(&mut tui)?;
                         main = new_main;
                     }
                     Action::Change => {

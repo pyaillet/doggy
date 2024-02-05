@@ -492,19 +492,6 @@ impl Client {
             mut input,
         } = self.client.start_exec(&exec, None).await?
         {
-            // pipe stdin into the docker exec stream input
-            let handle = spawn(async move {
-                let mut buf: [u8; 1] = [0];
-                let mut should_stop = false;
-                let mut stdin = stdin();
-                while !should_stop {
-                    select!(
-                        _ = _cancellation_token.cancelled() => { should_stop = true; },
-                        _ = stdin.read(&mut buf) => { input.write(&buf).await.ok(); }
-                    );
-                }
-            });
-
             stdout.execute(MoveTo(0, 0))?;
             stdout.execute(Clear(ClearType::All))?;
             stdout.execute(cursor::Show)?;
@@ -518,6 +505,19 @@ impl Client {
                     },
                 )
                 .await?;
+
+            // pipe stdin into the docker exec stream input
+            let handle = spawn(async move {
+                let mut buf: [u8; 1] = [0];
+                let mut should_stop = false;
+                let mut stdin = stdin();
+                while !should_stop {
+                    select!(
+                        _ = _cancellation_token.cancelled() => { should_stop = true; },
+                        _ = stdin.read(&mut buf) => { input.write(&buf).await.ok(); }
+                    );
+                }
+            });
 
             // pipe docker exec output into stdout
             while let Some(Ok(output)) = output.next().await {
