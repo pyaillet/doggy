@@ -39,7 +39,7 @@ You can either install it with CRI support if you want to use it with containerd
 
 ```shell-session
 brew tap pyaillet/homebrew-formulas
-brew install pyaillet/doggy
+brew install pyaillet/formulas/doggy
 ```
 
 ## Usage
