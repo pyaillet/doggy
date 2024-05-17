@@ -393,7 +393,7 @@ impl Client {
             self.list_containers(true, &Filter::default().compose())
                 .await?
                 .into_iter()
-                .filter(|c| c.labels.get(DOCKER_COMPOSE_PROJECT).is_some())
+                .filter(|c| c.labels.contains_key(DOCKER_COMPOSE_PROJECT))
                 .map(|c| self.get_container_details(c.id.to_string())),
         )
         .await?;
@@ -401,13 +401,13 @@ impl Client {
             .list_volumes(&Filter::default().compose())
             .await?
             .into_iter()
-            .filter(|v| v.labels.get(DOCKER_COMPOSE_PROJECT).is_some())
+            .filter(|v| v.labels.contains_key(DOCKER_COMPOSE_PROJECT))
             .collect();
         let n: Vec<NetworkSummary> = self
             .list_networks(&Filter::default().compose())
             .await?
             .into_iter()
-            .filter(|n| n.labels.get(DOCKER_COMPOSE_PROJECT).is_some())
+            .filter(|n| n.labels.contains_key(DOCKER_COMPOSE_PROJECT))
             .collect();
 
         let projects = c
@@ -514,7 +514,7 @@ impl Client {
                 while !should_stop {
                     select!(
                         _ = _cancellation_token.cancelled() => { should_stop = true; },
-                        _ = stdin.read(&mut buf) => { input.write(&buf).await.ok(); }
+                        _ = stdin.read(&mut buf) => { input.write_all(&buf).await.ok(); }
                     );
                 }
             });
