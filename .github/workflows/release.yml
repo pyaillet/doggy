@@ -102,7 +102,7 @@ jobs:
           homebrew_owner: pyaillet
           homebrew_tap: homebrew-formulas
 
-          formula_folder: pyaillet
+          formula_folder: Formula
 
           # The Personal Access Token (saved as a repo secret) that has `repo` permissions for the repo running the action AND Homebrew tap you want to release to.
           # Required - string
